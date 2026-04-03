@@ -1,0 +1,139 @@
+{% extends 'smru/base.html' %}
+
+{% block title %}Events - SMRU College Portal{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <h2 class="section-title">Upcoming Events</h2>
+
+    <!-- Filter -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <form method="get" class="row g-2">
+                <div class="col-md-4">
+                    <select name="status" class="form-select">
+                        <option value="">All Events</option>
+                        <option value="upcoming" {% if current_status == 'upcoming' %}selected{% endif %}>Upcoming</option>
+                        <option value="ongoing" {% if current_status == 'ongoing' %}selected{% endif %}>Ongoing</option>
+                        <option value="completed" {% if current_status == 'completed' %}selected{% endif %}>Completed</option>
+                        <option value="cancelled" {% if current_status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100">Filter</button>
+                </div>
+                <div class="col-md-4">
+                    <a href="{% url 'smru:events' %}" class="btn btn-outline-secondary w-100">Reset</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if events %}
+    <div class="row g-3">
+        {% for event in events %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                {% if event.image %}
+                <img src="{{ event.image.url }}" class="card-img-top" alt="{{ event.name }}" style="height: 250px; object-fit: cover;">
+                {% else %}
+                <div style="height: 250px; background-color: #e9ecef; display: flex; align-items: center; justify-content: center;">
+                    <i class="fas fa-calendar-alt fa-4x text-muted"></i>
+                </div>
+                {% endif %}
+                <div class="card-body">
+                    <div class="mb-2">
+                        {% if event.status == 'upcoming' %}
+                        <span class="badge bg-info">{{ event.get_status_display }}</span>
+                        {% elif event.status == 'ongoing' %}
+                        <span class="badge bg-primary">{{ event.get_status_display }}</span>
+                        {% elif event.status == 'completed' %}
+                        <span class="badge bg-success">{{ event.get_status_display }}</span>
+                        {% elif event.status == 'cancelled' %}
+                        <span class="badge bg-danger">{{ event.get_status_display }}</span>
+                        {% else %}
+                        <span class="badge bg-secondary">{{ event.get_status_display }}</span>
+                        {% endif %}
+                    </div>
+                    <h5 class="card-title">{{ event.name }}</h5>
+                    <p class="card-text text-muted">{{ event.description|truncatewords:15 }}</p>
+                    
+                    <div class="event-details mb-3">
+                        <small class="d-block mb-2">
+                            <i class="fas fa-calendar"></i> 
+                            <strong>{{ event.date|date:"d M Y" }}</strong>
+                            {% if event.time %}
+                            at {{ event.time|time:"H:i" }}
+                            {% endif %}
+                        </small>
+                        <small class="d-block mb-2">
+                            <i class="fas fa-map-marker-alt"></i> {{ event.location }}
+                        </small>
+                        {% if event.capacity %}
+                        <small class="d-block">
+                            <i class="fas fa-users"></i> 
+                            {{ event.registered_count }}/{{ event.capacity }} registered
+                            <div class="progress mt-1" style="height: 5px;">
+                                <div class="progress-bar" style="width: {% widthratio event.registered_count event.capacity 100 %}%"></div>
+                            </div>
+                        </small>
+                        {% endif %}
+                    </div>
+
+                    {% if event.registration_link %}
+                    <a href="{{ event.registration_link }}" class="btn btn-sm btn-primary w-100" target="_blank">
+                        <i class="fas fa-check-circle"></i> Register Now
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+    <nav class="mt-5">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1&status={{ current_status }}">First</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}&status={{ current_status }}">Previous</a>
+            </li>
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <li class="page-item active">
+                <span class="page-link">{{ num }}</span>
+            </li>
+            {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}&status={{ current_status }}">{{ num }}</a>
+            </li>
+            {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}&status={{ current_status }}">Next</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&status={{ current_status }}">Last</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <div class="alert alert-info text-center py-5">
+        <i class="fas fa-calendar-times fa-3x mb-3"></i>
+        <p class="lead">No events found for the selected filter.</p>
+        <a href="{% url 'smru:events' %}" class="btn btn-primary mt-3">View All Events</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

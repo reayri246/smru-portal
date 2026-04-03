@@ -1,0 +1,437 @@
+{% extends 'smru/base.html' %}
+
+{% block title %}Home - SMRU College Portal{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 15px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    .stat-card:nth-child(2) {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .stat-card:nth-child(3) {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .stat-card:nth-child(4) {
+        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 300px;
+        height: 300px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 50%;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+    }
+
+    .stat-number {
+        font-size: 3rem;
+        font-weight: 800;
+        position: relative;
+        z-index: 1;
+    }
+
+    .stat-label {
+        font-size: 1rem;
+        font-weight: 600;
+        position: relative;
+        z-index: 1;
+        opacity: 0.9;
+    }
+
+    .feature-card {
+        border: none;
+        border-radius: 15px;
+        padding: 1.8rem 1.5rem;
+        text-align: center;
+        background: white;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100%;
+    }
+
+    .feature-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 5px;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .feature-icon {
+        font-size: 3rem;
+        margin-bottom: 1.2rem;
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .feature-card h5 {
+        font-size: 1.2rem;
+        font-weight: 700;
+        margin: 0.8rem 0;
+        color: #2c3e50;
+    }
+
+    .feature-card p {
+        color: #6c757d;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        margin: 0;
+        flex-grow: 1;
+        display: flex;
+        align-items: center;
+    }
+
+    .hero-section h1 {
+        animation: slideInDown 0.8s ease;
+    }
+
+    .hero-section p {
+        animation: slideInUp 0.8s ease 0.2s backwards;
+    }
+
+    @keyframes slideInDown {
+        from {
+            opacity: 0;
+            transform: translateY(-30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes slideInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <!-- Hero Section -->
+    <div class="hero-section mb-5">
+        <div class="text-center mb-4">
+            <h1 class="display-4 fw-bold mb-3" style="color: white;">
+                <i class="fas fa-graduation-cap me-3" style="color: white;"></i>
+                SMRU Portal
+            </h1>
+            <p class="lead" style="color: rgba(255, 255, 255, 0.9);">Your Gateway to Academic Success</p>
+        </div>
+        <h2 class="display-5 fw-bold mb-3">
+            Welcome to SMRU College Portal
+        </h2>
+        <p class="lead">Your complete gateway to academic resources, notifications, and college management</p>
+        <div class="d-flex gap-3 flex-wrap align-items-center">
+            {% if user.is_authenticated %}
+            {% if user.student_profile.profile_picture %}
+            <img src="{{ user.student_profile.profile_picture.url }}" alt="Profile" class="rounded-circle me-3" style="width: 50px; height: 50px; object-fit: cover; border: 3px solid white;">
+            {% endif %}
+            <a href="{% url 'smru:profile' %}" class="btn btn-light btn-lg">
+                <i class="fas fa-user me-2"></i>View Profile
+            </a>
+            {% else %}
+            <a href="{% url 'smru:login' %}" class="btn btn-light btn-lg">
+                <i class="fas fa-sign-in-alt me-2"></i>Sign In
+            </a>
+            <a href="{% url 'smru:signup' %}" class="btn btn-outline-light btn-lg">
+                <i class="fas fa-user-plus me-2"></i>Create Account
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Statistics Grid -->
+    <div class="row g-4 mb-5">
+        <div class="col-md-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-number">{{ total_colleges|default:"0" }}</div>
+                <div class="stat-label">
+                    <i class="fas fa-university me-2"></i>Colleges
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-number">{{ total_events|default:"0" }}</div>
+                <div class="stat-label">
+                    <i class="fas fa-calendar-alt me-2"></i>Events
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-number">{{ total_complaints|default:"0" }}</div>
+                <div class="stat-label">
+                    <i class="fas fa-check-circle me-2"></i>Resolved
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-number">99.9%</div>
+                <div class="stat-label">
+                    <i class="fas fa-server me-2"></i>Uptime
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Section -->
+    <h2 class="section-title mb-4">
+        <i class="fas fa-star me-2"></i>Key Features
+    </h2>
+    <div class="row g-4 mb-5">
+        <div class="col-md-6 col-lg-4">
+            <div class="card feature-card h-100">
+                <div class="feature-icon">
+                    <i class="fas fa-book"></i>
+                </div>
+                <h5>Study Materials</h5>
+                <p>Access comprehensive engineering and medical notes from multiple colleges organized by subjects</p>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-4">
+            <div class="card feature-card h-100">
+                <div class="feature-icon">
+                    <i class="fas fa-bell"></i>
+                </div>
+                <h5>Smart Notifications</h5>
+                <p>Stay updated with prioritized announcements, events, and important college updates in real-time</p>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-4">
+            <div class="card feature-card h-100">
+                <div class="feature-icon">
+                    <i class="fas fa-calendar-check"></i>
+                </div>
+                <h5>Event Management</h5>
+                <p>Never miss important campus activities, competitions, and social events with complete details</p>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-4">
+            <div class="card feature-card h-100">
+                <div class="feature-icon">
+                    <i class="fas fa-headset"></i>
+                </div>
+                <h5>Support & Complaints</h5>
+                <p>Submit, track, and receive updates on your complaints with transparent status management</p>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-4">
+            <a href="{% url 'smru:profile' %}" class="text-decoration-none text-dark">
+                <div class="card feature-card h-100">
+                    <div class="feature-icon">
+                        <i class="fas fa-user-circle"></i>
+                    </div>
+                    <h5>Profile Management</h5>
+                    <p>Manage your student profile, contact information, and account settings</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-6 col-lg-4">
+            <a href="{% url 'smru:student_files' %}" class="text-decoration-none text-dark">
+                <div class="card feature-card h-100">
+                    <div class="feature-icon">
+                        <i class="fas fa-archive"></i>
+                    </div>
+                    <h5>Resource Library</h5>
+                    <p>Access important documents, files, and resources organized by college</p>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- Notifications Section -->
+    {% if notifications %}
+    <h2 class="section-title mb-4">
+        <i class="fas fa-bell me-2"></i>Latest Notifications
+    </h2>
+    <div class="row mb-5">
+        {% for notification in notifications %}
+        <div class="col-12 mb-3">
+            <div class="card border-left-primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h5 class="card-title mb-2">
+                                <span class="badge bg-{{ notification.priority|lower }}">{{ notification.get_priority_display }}</span>
+                                {{ notification.title }}
+                            </h5>
+                            <p class="card-text text-muted">{{ notification.description|truncatewords:40 }}</p>
+                            <small class="text-muted">
+                                <i class="fas fa-clock"></i> {{ notification.created_at|timesince }} ago
+                            </small>
+                        </div>
+                        {% if notification.link %}
+                        <a href="{{ notification.link }}" class="btn btn-sm btn-primary ms-2">View</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="text-center mb-5">
+        <a href="{% url 'smru:notifications' %}" class="btn btn-primary btn-lg">
+            <i class="fas fa-list me-2"></i>View All Notifications
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- Events Section -->
+    {% if events %}
+    <h2 class="section-title mb-4">
+        <i class="fas fa-calendar-alt me-2"></i>Upcoming Events
+    </h2>
+    <div class="row g-4 mb-5">
+        {% for event in events %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 event-card">
+                {% if event.image %}
+                <img src="{{ event.image.url }}" class="card-img-top" alt="{{ event.name }}">
+                {% else %}
+                <div style="height: 220px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center;">
+                    <i class="fas fa-calendar-alt fa-4x text-white opacity-50"></i>
+                </div>
+                {% endif %}
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">{{ event.name }}</h5>
+                    <p class="card-text text-muted flex-grow-1">{{ event.description|truncatewords:20 }}</p>
+                    <div class="mb-3">
+                        <small class="d-block text-muted mb-2">
+                            <i class="fas fa-calendar-alt"></i> {{ event.date|date:"d M Y" }}
+                        </small>
+                        <small class="d-block text-muted mb-2">
+                            <i class="fas fa-map-marker-alt"></i> {{ event.location }}
+                        </small>
+                        <span class="badge bg-info">{{ event.get_status_display }}</span>
+                    </div>
+                    {% if event.registration_link %}
+                    <a href="{{ event.registration_link }}" class="btn btn-primary w-100">
+                        <i class="fas fa-edit me-2"></i>Register
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="text-center mb-5">
+        <a href="{% url 'smru:events' %}" class="btn btn-primary btn-lg">
+            <i class="fas fa-calendar-alt me-2"></i>View All Events
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- Study Materials Section -->
+    <h2 class="section-title mb-4">
+        <i class="fas fa-book me-2"></i>Study Materials
+    </h2>
+    <div class="row g-4">
+        <div class="col-md-6 col-lg-4">
+            <a href="{% url 'smru:engineering' %}" class="text-decoration-none">
+                <div class="card study-card h-100">
+                    <div style="height: 120px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-cog fa-4x text-white"></i>
+                    </div>
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Engineering Notes</h5>
+                        <p class="card-text text-muted">AI/ML, CSE, CS Diploma, and more</p>
+                        <small class="text-primary fw-bold">Explore <i class="fas fa-arrow-right"></i></small>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-6 col-lg-4">
+            <a href="{% url 'smru:medical' %}" class="text-decoration-none">
+                <div class="card study-card h-100">
+                    <div style="height: 120px; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-stethoscope fa-4x text-white"></i>
+                    </div>
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Medical Notes</h5>
+                        <p class="card-text text-muted">MBBS, Nursing, Lab Notes</p>
+                        <small class="text-success fw-bold">Explore <i class="fas fa-arrow-right"></i></small>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-6 col-lg-4">
+            <a href="{% url 'smru:student_files' %}" class="text-decoration-none">
+                <div class="card study-card h-100">
+                    <div style="height: 120px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-file-archive fa-4x text-white"></i>
+                    </div>
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Student Files</h5>
+                        <p class="card-text text-muted">Important documents and resources</p>
+                        <small class="text-warning fw-bold">Explore <i class="fas fa-arrow-right"></i></small>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .study-card {
+        transition: var(--transition);
+    }
+
+    .study-card:hover {
+        transform: translateY(-10px);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .event-card {
+        transition: var(--transition);
+    }
+
+    .event-card:hover {
+        transform: translateY(-8px);
+    }
+</style>
+{% endblock %}
+
+</body>
+</html>

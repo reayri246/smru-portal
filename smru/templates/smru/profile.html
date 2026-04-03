@@ -1,0 +1,116 @@
+{% extends 'smru/base.html' %}
+
+{% block title %}My Profile - SMRU College Portal{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <h2 class="section-title">
+                <i class="fas fa-user-circle"></i> My Profile
+            </h2>
+
+            <div class="card shadow">
+                <div class="card-body p-5">
+                    <form method="post" enctype="multipart/form-data" novalidate>
+                        {% csrf_token %}
+                        
+                        <div class="row">
+                            <div class="col-md-4 text-center mb-4">
+                                {% if student_profile.profile_picture %}
+                                <img src="{{ student_profile.profile_picture.url }}" class="rounded-circle" alt="Profile" style="width: 150px; height: 150px; object-fit: cover;">
+                                {% else %}
+                                <div class="rounded-circle bg-primary d-inline-flex align-items-center justify-content-center" style="width: 150px; height: 150px;">
+                                    <i class="fas fa-user fa-5x text-white"></i>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-8">
+                                <h4>{{ user.get_full_name|default:user.username }}</h4>
+                                <p class="text-muted">
+                                    <i class="fas fa-envelope"></i> {{ user.email }}<br>
+                                    <i class="fas fa-id-card"></i> {{ student_profile.roll_number|default:"Not set" }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <h5 class="mb-3">Personal Information</h5>
+
+                        <div class="mb-3">
+                            <label for="id_roll_number" class="form-label">Username</label>
+                            {{ form.roll_number }}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="id_phone" class="form-label">Phone Number</label>
+                            {{ form.phone }}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="id_bio" class="form-label">Bio</label>
+                            {{ form.bio }}
+                            <small class="form-text text-muted">Tell us something about yourself.</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="id_profile_picture" class="form-label">Profile Picture</label>
+                            {{ form.profile_picture }}
+                            <small class="form-text text-muted">Clear image, face visible (Max 5MB)</small>
+                        </div>
+
+                        <hr>
+
+                        <h5 class="mb-3">Academic Information</h5>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">College</label>
+                                <p class="form-control-plaintext">{{ student_profile.college|default:"Not set" }}</p>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Branch</label>
+                                <p class="form-control-plaintext">{{ student_profile.branch|default:"Not set" }}</p>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Year</label>
+                            {% if student_profile.year %}
+                            <p class="form-control-plaintext">{{ student_profile.year.name }}</p>
+                            {% else %}
+                            <p class="form-control-plaintext">Not set</p>
+                            {% endif %}
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            Contact the admin to update your college, branch, or year information.
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg w-100 mb-3">
+                            <i class="fas fa-save"></i> Save Changes
+                        </button>
+                    </form>
+
+                    <hr>
+
+                    <div class="row text-center">
+                        <div class="col-md-6">
+                            <a href="{% url 'smru:my_complaints' %}" class="btn btn-outline-secondary w-100">
+                                <i class="fas fa-list"></i> My Complaints
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="{% url 'smru:home' %}" class="btn btn-outline-primary w-100">
+                                <i class="fas fa-home"></i> Back to Home
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

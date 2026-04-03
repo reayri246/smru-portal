@@ -1,0 +1,105 @@
+{% extends 'smru/base.html' %}
+
+{% block title %}Submit Complaint - SMRU College Portal{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-body p-5">
+                    <div class="text-center mb-4">
+                        <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                        <h2 class="card-title">Submit a Complaint</h2>
+                        <p class="text-muted">We're here to listen. Share your concerns with us.</p>
+                    </div>
+
+                    <form method="post" enctype="multipart/form-data" novalidate>
+                        {% csrf_token %}
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="id_name" class="form-label">Full Name <span class="text-danger">*</span></label>
+                                {{ form.name }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="id_roll" class="form-label">Roll Number <span class="text-danger">*</span></label>
+                                {{ form.roll }}
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="id_email" class="form-label">Email Address <span class="text-danger">*</span></label>
+                                {{ form.email }}
+                                <small class="form-text text-muted">We'll contact you on this email for updates.</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="id_phone" class="form-label">Phone Number</label>
+                                {{ form.phone }}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="id_category" class="form-label">Category <span class="text-danger">*</span></label>
+                            {{ form.category }}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="id_complaint_text" class="form-label">Complaint Details <span class="text-danger">*</span></label>
+                            {{ form.complaint_text }}
+                            <small class="form-text text-muted">Please provide detailed information about your complaint.</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="id_file" class="form-label">Attach Document (Optional)</label>
+                            {{ form.file }}
+                            <small class="form-text text-muted">
+                                Accepted formats: PDF, DOC, DOCX, JPG, PNG, ZIP (Max 5MB)
+                            </small>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Note:</strong> Your complaint will be reviewed by our team. You can track the status using your reference ID.
+                        </div>
+
+                        <button type="submit" class="btn btn-warning btn-lg w-100 mb-3">
+                            <i class="fas fa-paper-plane"></i> Submit Complaint
+                        </button>
+                    </form>
+
+                    <hr>
+
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <h5><i class="fas fa-lock text-success"></i></h5>
+                            <p class="small">Your data is secure</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h5><i class="fas fa-hourglass-half text-info"></i></h5>
+                            <p class="small">Quick response time</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h5><i class="fas fa-check-circle text-primary"></i></h5>
+                            <p class="small">Track status anytime</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-3 border-top">
+                        {% if user.is_authenticated %}
+                        <p class="text-center text-muted">
+                            <a href="{% url 'smru:my_complaints' %}">View your submitted complaints</a>
+                        </p>
+                        {% else %}
+                        <p class="text-center text-muted">
+                            <a href="{% url 'smru:login' %}">Login</a> to track your complaints
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

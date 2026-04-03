@@ -1,0 +1,95 @@
+{% extends 'smru/base.html' %}
+
+{% block title %}Medical Notes - SMRU College Portal{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <h2 class="section-title">
+        <i class="fas fa-stethoscope"></i> Medical Notes
+    </h2>
+
+    <div class="row">
+        <div class="col-lg-3 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Select Path</h5>
+                    <form method="get" id="filterForm">
+                        <div class="mb-3">
+                            <label for="college" class="form-label">College</label>
+                            <select name="college" id="college" class="form-select">
+                                <option value="">Choose College...</option>
+                                {% for college in colleges %}
+                                <option value="{{ college.id }}" {% if college.id|stringformat:"s" == selected_college %}selected{% endif %}>
+                                    {{ college.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="branch" class="form-label">Branch</label>
+                            <select name="branch" id="branch" class="form-select">
+                                <option value="">Choose Branch...</option>
+                                {% for branch in branches %}
+                                <option value="{{ branch.id }}" {% if branch.id|stringformat:"s" == selected_branch %}selected{% endif %}>
+                                    {{ branch.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="year" class="form-label">Year</label>
+                            <select name="year" id="year" class="form-select">
+                                <option value="">Choose Year...</option>
+                                {% for year in years %}
+                                <option value="{{ year.id }}" {% if year.id|stringformat:"s" == selected_year %}selected{% endif %}>
+                                    {{ year.get_name_display }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">Show Subjects</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-9">
+            {% if subjects %}
+            <div class="row g-3">
+                {% for subject in subjects %}
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ subject.name }}</h5>
+                            {% if subject.code %}
+                            <p class="text-muted"><small>Code: {{ subject.code }}</small></p>
+                            {% endif %}
+                            <p class="text-muted"><small>{{ subject.year }}</small></p>
+                            
+                            {% if subject.drive_link %}
+                            <a href="{{ subject.drive_link }}" class="btn btn-sm btn-success" target="_blank">
+                                <i class="fas fa-folder-open"></i> Access Notes
+                            </a>
+                            {% else %}
+                            <button class="btn btn-sm btn-secondary" disabled>
+                                <i class="fas fa-lock"></i> Not Available
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="alert alert-info text-center py-5">
+                <i class="fas fa-search fa-3x mb-3"></i>
+                <p class="lead">Select a college, branch, and year to view available subjects.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

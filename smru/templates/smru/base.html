@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="SMRU College Portal - Your Gateway to Academic Success">
+    <meta name="author" content="College Portal Team">
+    <title>{% block title %}SMRU College Portal{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #0d6efd;
+            --primary-dark: #0b5ed7;
+            --secondary-color: #6c757d;
+            --success-color: #198754;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+            --info-color: #0dcaf0;
+            --light-bg: #f8f9fa;
+            --white: #ffffff;
+            --text-dark: #2c3e50;
+            --text-light: #6c757d;
+            --shadow-sm: 0 2px 8px rgba(0,0,0,0.1);
+            --shadow-md: 0 5px 15px rgba(0,0,0,0.15);
+            --shadow-lg: 0 10px 30px rgba(0,0,0,0.2);
+            --border-radius: 10px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: var(--text-dark);
+            line-height: 1.6;
+        }
+
+        main {
+            flex: 1;
+            margin-top: 20px;
+        }
+
+        /* Enhanced Navbar Styling */
+        .navbar {
+            background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);
+            box-shadow: var(--shadow-md);
+            padding: 1rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: white !important;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .navbar-brand i {
+            font-size: 2rem;
+        }
+
+        .nav-link {
+            transition: all 0.3s ease;
+            margin: 0 0.5rem;
+        }
+
+        .nav-link:hover {
+            color: #fff3cd !important;
+            border-bottom: 2px solid white;
+        }
+
+        /* Cards */
+        .card {
+            border: none;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-sm);
+            transition: var(--transition);
+            height: 100%;
+            overflow: hidden;
+            background: var(--white);
+        }
+
+        .card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, #f0f4f8 0%, #e8ecf1 100%);
+            border-bottom: 2px solid #dee2e6;
+            padding: 1.25rem;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        .card-img-top {
+            object-fit: cover;
+            height: 200px;
+        }
+
+        /* Alerts */
+        .alert {
+            border-radius: var(--border-radius);
+            border: none;
+            box-shadow: var(--shadow-sm);
+            transition: var(--transition);
+            border-left: 4px solid transparent;
+        }
+
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border-left-color: var(--success-color);
+        }
+
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-left-color: var(--danger-color);
+        }
+
+        .alert-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border-left-color: var(--info-color);
+        }
+
+        /* Buttons */
+        .btn {
+            border-radius: 6px;
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+            transition: var(--transition);
+            border: none;
+            font-size: 0.95rem;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            border-color: var(--primary-dark);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--primary-dark) 0%, #0a58ca 100%);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-secondary {
+            background-color: var(--secondary-color);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #5a6268;
+            transform: translateY(-2px);
+        }
+
+        .btn-outline-primary {
+            color: var(--primary-color);
+            border: 2px solid var(--primary-color);
+        }
+
+        .btn-outline-primary:hover {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        /* Forms */
+        .form-control, .form-select {
+            border-radius: 6px;
+            border: 1.5px solid #dee2e6;
+            transition: var(--transition);
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+        }
+
+        .form-control::placeholder {
+            color: #aaa;
+            font-style: italic;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.3rem rgba(13, 110, 253, 0.15);
+        }
+
+        .form-label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-dark);
+        }
+
+        /* Form groups */
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        /* Section Title */
+        .section-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--text-dark);
+            margin: 3rem 0 2rem 0;
+            padding-bottom: 1.5rem;
+            border-bottom: 4px solid var(--primary-color);
+            position: relative;
+            display: inline-block;
+        }
+
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, var(--primary-color) 0%, transparent 100%);
+        }
+
+        /* Hero Section */
+        .hero-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 4rem 2rem;
+            border-radius: var(--border-radius);
+            margin-bottom: 3rem;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 400px;
+            height: 400px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            margin-top: -200px;
+            margin-right: -200px;
+        }
+
+        .hero-section h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-section p {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Footer */
+        footer {
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+            color: white;
+            padding: 3rem 0 1rem 0;
+            margin-top: 4rem;
+            border-top: 4px solid var(--primary-color);
+            box-shadow: 0 -5px 15px rgba(0,0,0,0.1);
+        }
+
+        footer h5 {
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: white;
+        }
+
+        footer a {
+            color: #cbd5e0;
+            text-decoration: none;
+            transition: var(--transition);
+            font-size: 0.95rem;
+        }
+
+        footer a:hover {
+            color: white;
+            padding-left: 5px;
+        }
+
+        footer .footer-section {
+            margin-bottom: 1.5rem;
+        }
+
+        footer .social-links a {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 0.5rem;
+        }
+
+        footer .social-links a:hover {
+            background-color: var(--primary-color);
+            transform: translateY(-3px);
+        }
+
+        footer .copyright {
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 1rem;
+            margin-top: 1.5rem;
+            text-align: center;
+            color: #a0aec0;
+        }
+
+        /* Breadcrumb */
+        .breadcrumb {
+            background-color: transparent;
+            padding: 1rem 0;
+        }
+
+        .breadcrumb-item.active {
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        /* Pagination */
+        .pagination {
+            gap: 0.25rem;
+        }
+
+        .page-link {
+            border-radius: 4px;
+            transition: var(--transition);
+            border-color: #dee2e6;
+        }
+
+        .page-link:hover {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+
+        .page-link.active {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        /* User Menu */
+        .dropdown-menu {
+            border-radius: var(--border-radius);
+            border: none;
+            box-shadow: var(--shadow-lg);
+            padding: 0.5rem 0;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .dropdown-item {
+            padding: 0.75rem 1.5rem;
+            transition: var(--transition);
+            color: var(--text-dark);
+        }
+
+        .dropdown-item:hover {
+            background-color: #f0f4f8;
+            color: var(--primary-color);
+            padding-left: 2rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            transition: var(--transition);
+        }
+
+        .user-avatar:not(img) {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .nav-link:hover .user-avatar {
+            transform: scale(1.1);
+        }
+
+        /* Badge */
+        .badge {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: var(--transition);
+        }
+
+        .badge-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .badge-success {
+            background-color: var(--success-color);
+            color: white;
+        }
+
+        .badge-danger {
+            background-color: var(--danger-color);
+            color: white;
+        }
+
+        .badge-warning {
+            background-color: var(--warning-color);
+            color: var(--text-dark);
+        }
+
+        /* Responsive */
+        @media (max-width: 992px) {
+            .section-title {
+                font-size: 2rem;
+            }
+
+            .hero-section h1 {
+                font-size: 2rem;
+            }
+
+            .hero-section::before {
+                width: 300px;
+                height: 300px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .section-title {
+                font-size: 1.75rem;
+            }
+
+            .card {
+                margin-bottom: 1.5rem;
+            }
+
+            .hero-section {
+                padding: 2.5rem 1.5rem;
+            }
+
+            .hero-section h1 {
+                font-size: 1.75rem;
+            }
+
+            .hero-section p {
+                font-size: 1rem;
+            }
+        }
+
+        /* Loading Spinner */
+        .spinner-border {
+            border-width: 0.25em;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Animations */
+        .alert-success {
+            animation: slideDown 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* Smooth Scrolling */
+        .smooth-scroll {
+            scroll-behavior: smooth;
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body>
+    <!-- Navbar - Only shown for authenticated users -->
+    {% if user.is_authenticated %}
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'smru:home' %}">
+                <i class="fas fa-graduation-cap"></i>
+                SMRU Portal
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="{% url 'smru:home' %}">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'smru:notifications' %}">Notifications</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'smru:events' %}">Events</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'smru:engineering' %}">Engineering Notes</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'smru:medical' %}">Medical Notes</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'smru:complaints' %}">Complaints</a></li>
+
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            {% if user.student_profile.profile_picture %}
+                            <img src="{{ user.student_profile.profile_picture.url }}" alt="Profile" class="user-avatar">
+                            {% else %}
+                            <div class="user-avatar">{{ user.first_name|first|upper }}</div>
+                            {% endif %}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                            <li><a class="dropdown-item" href="{% url 'smru:profile' %}"><i class="fas fa-user"></i> Profile</a></li>
+                            <li><a class="dropdown-item" href="{% url 'smru:my_complaints' %}"><i class="fas fa-list"></i> My Complaints</a></li>
+                            {% if user.student_profile.can_view_all_complaints or user.is_staff or user.is_superuser %}
+                            <li><a class="dropdown-item" href="{% url 'smru:all_complaints' %}"><i class="fas fa-eye"></i> All Complaints</a></li>
+                            {% endif %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'smru:logout' %}"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <!-- Main Content -->
+    <main class="container-fluid">
+        <!-- Messages -->
+        {% if messages %}
+        <div class="container mt-3">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Page Content -->
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col-md-4">
+                    <h5><i class="fas fa-info-circle"></i> About</h5>
+                    <p>SMRU College Portal is your gateway to academic success. Access notes, track events, and manage complaints.</p>
+                </div>
+                <div class="col-md-4">
+                    <h5><i class="fas fa-link"></i> Quick Links</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="{% url 'smru:home' %}">Home</a></li>
+                        <li><a href="{% url 'smru:notifications' %}">Notifications</a></li>
+                        <li><a href="{% url 'smru:events' %}">Events</a></li>
+                        <li><a href="{% url 'smru:complaints' %}">Complaints</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-4">
+                    <h5><i class="fas fa-envelope"></i> Contact</h5>
+                    <p>
+                        Email: info@smruportal.com<br>
+                        Phone: +91-XXX-XXX-XXXX<br>
+                        Address: College Campus
+                    </p>
+                </div>
+            </div>
+            <hr style="border-color: rgba(255,255,255,0.1);">
+            <div class="text-center">
+                <p>&copy; 2026 SMRU College Portal. All rights reserved. | 
+                <a href="#">Privacy Policy</a> | 
+                <a href="#">Terms of Service</a></p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
