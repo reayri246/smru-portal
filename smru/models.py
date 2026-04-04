@@ -1,17 +1,10 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
-from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
-from django.dispatch import receiver
 
 # College & Branch & Year & Subject for notes
 class College(models.Model):
-    COLLEGE_TYPE_CHOICES = (
-        ('engineering', 'Engineering'),
-        ('medical', 'Medical'),
-    )
     name = models.CharField(max_length=200, unique=True)
-    college_type = models.CharField(max_length=20, choices=COLLEGE_TYPE_CHOICES, default='engineering')
     description = models.TextField(blank=True, null=True)
     drive_link = models.URLField(blank=True, null=True)  # Optional general folder
     image = models.ImageField(upload_to='college_images/', blank=True, null=True)
@@ -26,13 +19,8 @@ class College(models.Model):
         return self.name
 
 class Branch(models.Model):
-    BRANCH_TYPE_CHOICES = (
-        ('engineering', 'Engineering'),
-        ('medical', 'Medical'),
-    )
     college = models.ForeignKey(College, on_delete=models.CASCADE, related_name='branches')
     name = models.CharField(max_length=200)
-    branch_type = models.CharField(max_length=20, choices=BRANCH_TYPE_CHOICES, default='engineering')
     code = models.CharField(max_length=50, blank=True)
 
     class Meta:
@@ -57,7 +45,7 @@ class Year(models.Model):
         ordering = ['branch', 'name']
 
     def __str__(self):
-        return f"{self.branch.college.name} / {self.branch.name} - {self.name}"
+        return f"{self.branch.name} - {self.name}"
 
 class Subject(models.Model):
     year = models.ForeignKey(Year, on_delete=models.CASCADE, related_name='subjects')
@@ -76,29 +64,7 @@ class Subject(models.Model):
         return f"{self.year} - {self.name}"
 
 
-class LoginActivity(models.Model):
-    ACTIVITY_CHOICES = (
-        ('login', 'Login'),
-        ('logout', 'Logout'),
-        ('failed', 'Failed Login'),
-    )
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='login_activities', null=True, blank=True)
-    activity_type = models.CharField(max_length=20, choices=ACTIVITY_CHOICES)
-    timestamp = models.DateTimeField(auto_now_add=True)
-    ip_address = models.CharField(max_length=45, blank=True, null=True)
-    user_agent = models.CharField(max_length=300, blank=True, null=True)
-    notes = models.TextField(blank=True, null=True)
-
-    class Meta:
-        ordering = ['-timestamp']
-        verbose_name = 'Login Activity'
-        verbose_name_plural = 'Login Activities'
-
-    def __str__(self):
-        return f"{self.activity_type} - {self.user or 'unknown'} - {self.timestamp}"
-
-
+# Notifications
 class Notification(models.Model):
     PRIORITY_CHOICES = (
         ('low', 'Low'),
@@ -219,10 +185,6 @@ class StudentProfile(models.Model):
     phone = models.CharField(max_length=15, blank=True)
     profile_picture = models.ImageField(upload_to='student_profiles/', blank=True, null=True)
     bio = models.TextField(blank=True)
-    # Permissions
-    can_view_all_complaints = models.BooleanField(default=False, help_text="Allow this user to view all complaints")
-    can_manage_events = models.BooleanField(default=False, help_text="Allow this user to manage events")
-    can_manage_notifications = models.BooleanField(default=False, help_text="Allow this user to manage notifications")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -231,38 +193,4 @@ class StudentProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.get_full_name()} - {self.roll_number}"
-
-
-@receiver(user_logged_in)
-def log_user_logged_in(sender, request, user, **kwargs):
-    LoginActivity.objects.create(
-        user=user,
-        activity_type='login',
-        ip_address=request.META.get('REMOTE_ADDR', ''),
-        user_agent=request.META.get('HTTP_USER_AGENT', ''),
-        notes='User logged in successfully'
-    )
-
-
-@receiver(user_logged_out)
-def log_user_logged_out(sender, request, user, **kwargs):
-    LoginActivity.objects.create(
-        user=user,
-        activity_type='logout',
-        ip_address=request.META.get('REMOTE_ADDR', ''),
-        user_agent=request.META.get('HTTP_USER_AGENT', ''),
-        notes='User logged out successfully'
-    )
-
-
-@receiver(user_login_failed)
-def log_user_login_failed(sender, credentials, request, **kwargs):
-    username = credentials.get('username') if credentials else None
-    LoginActivity.objects.create(
-        user=None,
-        activity_type='failed',
-        ip_address=request.META.get('REMOTE_ADDR', ''),
-        user_agent=request.META.get('HTTP_USER_AGENT', ''),
-        notes=f"Failed login for username: {username}"
-    )
 

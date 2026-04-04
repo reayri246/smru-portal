@@ -566,9 +566,6 @@
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
                             <li><a class="dropdown-item" href="{% url 'smru:profile' %}"><i class="fas fa-user"></i> Profile</a></li>
                             <li><a class="dropdown-item" href="{% url 'smru:my_complaints' %}"><i class="fas fa-list"></i> My Complaints</a></li>
-                            {% if user.student_profile.can_view_all_complaints or user.is_staff or user.is_superuser %}
-                            <li><a class="dropdown-item" href="{% url 'smru:all_complaints' %}"><i class="fas fa-eye"></i> All Complaints</a></li>
-                            {% endif %}
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{% url 'smru:logout' %}"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
                         </ul>

@@ -22,7 +22,6 @@ urlpatterns = [
     # Complaints
     path('complaints/', views.complaints, name='complaints'),
     path('my-complaints/', views.my_complaints, name='my_complaints'),
-    path('all-complaints/', views.all_complaints, name='all_complaints'),
     path('complaint/<int:complaint_id>/', views.complaint_detail, name='complaint_detail'),
     
     # User profile

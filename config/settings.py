@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables
 DEBUG = config('DEBUG', default=True, cast=bool)
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-fhwpq*ws_x+ar5)34&!a%lo2#s1c+d!p8(_0llm%t+t8lmzbdk')
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
+ALLOWED_HOSTS = config('*', default='localhost,127.0.0.1', cast=Csv())
 
 
 # Application definition

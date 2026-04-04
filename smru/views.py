@@ -167,52 +167,29 @@ def events_view(request):
 def engineering_notes(request):
     """Engineering notes - Branch and subject selection"""
     try:
-        colleges_list = College.objects.filter(college_type='engineering')
+        colleges_list = College.objects.all()
         college_id = request.GET.get('college')
         branch_id = request.GET.get('branch')
         year_id = request.GET.get('year')
         
-        branches = Branch.objects.filter(branch_type='engineering')
-        years = Year.objects.all()
-        subjects = Subject.objects.none()
+        branches = []
+        years = []
+        subjects = []
         
-        # If user is logged in and has a student profile, use their details as defaults
-        if not college_id and request.user.is_authenticated:
-            try:
-                student_profile = request.user.student_profile
-                if student_profile.college and student_profile.college.college_type == 'engineering':
-                    college_id = str(student_profile.college.id)
-                if student_profile.branch and student_profile.branch.branch_type == 'engineering':
-                    branch_id = str(student_profile.branch.id)
-                if student_profile.year:
-                    year_id = str(student_profile.year.id)
-            except StudentProfile.DoesNotExist:
-                pass
-        
-        # Filter branches if college selected
         if college_id:
             try:
-                college = College.objects.get(id=college_id, college_type='engineering')
-                branches = college.branches.filter(branch_type='engineering')
-            except College.DoesNotExist:
-                pass
-        
-        # Filter years if branch selected
-        if branch_id:
-            try:
-                branch = Branch.objects.get(id=branch_id, branch_type='engineering')
-                years = branch.years.all()
-            except Branch.DoesNotExist:
-                pass
-        
-        # Show subjects only if year selected
-        if year_id:
-            try:
-                year = Year.objects.get(id=year_id)
-                if year.branch.branch_type == 'engineering':
-                    subjects = year.subjects.all()
-            except Year.DoesNotExist:
-                pass
+                college = College.objects.get(id=college_id)
+                branches = college.branches.all()
+                
+                if branch_id:
+                    branch = Branch.objects.get(id=branch_id)
+                    years = branch.years.all()
+                    
+                    if year_id:
+                        year = Year.objects.get(id=year_id)
+                        subjects = year.subjects.all()
+            except (College.DoesNotExist, Branch.DoesNotExist, Year.DoesNotExist):
+                messages.error(request, 'Invalid selection.')
         
         return render(request, 'smru/engineering.html', {
             'colleges': colleges_list,
@@ -231,36 +208,29 @@ def engineering_notes(request):
 def medical_notes(request):
     """Medical notes - Branch and subject selection"""
     try:
-        colleges_list = College.objects.filter(college_type='medical')
+        colleges_list = College.objects.all()
         college_id = request.GET.get('college')
         branch_id = request.GET.get('branch')
         year_id = request.GET.get('year')
         
-        branches = Branch.objects.filter(branch_type='medical')
-        years = Year.objects.all()
-        subjects = Subject.objects.none()
+        branches = []
+        years = []
+        subjects = []
         
         if college_id:
             try:
-                college = College.objects.get(id=college_id, college_type='medical')
-                branches = college.branches.filter(branch_type='medical')
-            except College.DoesNotExist:
-                pass
-        
-        if branch_id:
-            try:
-                branch = Branch.objects.get(id=branch_id, branch_type='medical')
-                years = branch.years.all()
-            except Branch.DoesNotExist:
-                pass
-        
-        if year_id:
-            try:
-                year = Year.objects.get(id=year_id)
-                if year.branch.branch_type == 'medical':
-                    subjects = year.subjects.all()
-            except Year.DoesNotExist:
-                pass
+                college = College.objects.get(id=college_id)
+                branches = college.branches.all()
+                
+                if branch_id:
+                    branch = Branch.objects.get(id=branch_id)
+                    years = branch.years.all()
+                    
+                    if year_id:
+                        year = Year.objects.get(id=year_id)
+                        subjects = year.subjects.all()
+            except (College.DoesNotExist, Branch.DoesNotExist, Year.DoesNotExist):
+                messages.error(request, 'Invalid selection.')
         
         return render(request, 'smru/medical.html', {
             'colleges': colleges_list,
@@ -345,34 +315,6 @@ def my_complaints(request):
     except Exception as e:
         logger.error(f"Error in my_complaints view: {str(e)}")
         return render(request, 'smru/my_complaints.html', {'error': 'Could not load complaints'})
-
-
-@login_required(login_url='smru:login')
-def all_complaints(request):
-    """View all complaints (for authorized users only)"""
-    try:
-        # Check if user has permission to view all complaints
-        if not hasattr(request.user, 'student_profile') or not request.user.student_profile.can_view_all_complaints:
-            if not request.user.is_staff and not request.user.is_superuser:
-                messages.error(request, 'You do not have permission to view all complaints.')
-                return redirect('smru:my_complaints')
-        
-        # Get all complaints
-        all_complaints = Complaint.objects.all().order_by('-submitted_at')
-        
-        # Pagination
-        paginator = Paginator(all_complaints, 20)
-        page_number = request.GET.get('page', 1)
-        page_obj = paginator.get_page(page_number)
-        
-        return render(request, 'smru/all_complaints.html', {
-            'complaints': page_obj,
-            'paginator': paginator,
-            'page_obj': page_obj,
-        })
-    except Exception as e:
-        logger.error(f"Error in all_complaints view: {str(e)}")
-        return render(request, 'smru/all_complaints.html', {'error': 'Could not load complaints'})
 
 
 def complaint_detail(request, complaint_id):
