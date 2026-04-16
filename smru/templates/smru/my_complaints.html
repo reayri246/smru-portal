@@ -19,24 +19,36 @@
                             <th>Category</th>
                             <th>Submitted</th>
                             <th>Status</th>
-                            <th>Action</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for complaint in complaints %}
                         <tr>
                             <td><strong>{{ complaint.id }}</strong></td>
-                            <td>{{ complaint.get_category_display }}</td>
+                            <td>{{ complaint.category.name }}</td>
                             <td>{{ complaint.submitted_at|date:"d M Y H:i" }}</td>
                             <td>
-                                <span class="badge bg-{{ complaint.status|default:'secondary' }}">
+                                <span class="badge bg-{% if complaint.status == 'new' %}primary{% elif complaint.status == 'in_progress' %}warning{% elif complaint.status == 'resolved' %}success{% else %}secondary{% endif %}">
                                     {{ complaint.get_status_display }}
                                 </span>
                             </td>
                             <td>
-                                <a href="{% url 'smru:complaint_detail' complaint.id %}" class="btn btn-sm btn-primary">
-                                    <i class="fas fa-eye"></i> View
-                                </a>
+                                <div class="btn-group" role="group">
+                                    <a href="{% url 'smru:complaint_detail' complaint.id %}" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-eye"></i> View
+                                    </a>
+                                    {% if complaint.status in 'resolved,closed' and not complaint.is_confirmed_solved_by_student %}
+                                    <form method="post" style="display: inline;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="complaint_id" value="{{ complaint.id }}">
+                                        <input type="hidden" name="action" value="mark_solved">
+                                        <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Are you sure this complaint is solved?')">
+                                            <i class="fas fa-check"></i> Mark Solved
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}

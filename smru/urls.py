@@ -8,6 +8,8 @@ urlpatterns = [
     path('signup/', views.signup, name='signup'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
+    path('forgot-password/', views.forgot_password, name='forgot_password'),
+    path('reset-password/<str:token>/', views.reset_password, name='reset_password'),
     
     # Home and main pages
     path('', views.home, name='home'),
@@ -22,6 +24,7 @@ urlpatterns = [
     # Complaints
     path('complaints/', views.complaints, name='complaints'),
     path('my-complaints/', views.my_complaints, name='my_complaints'),
+    path('manage-complaints/', views.manage_complaints, name='manage_complaints'),
     path('complaint/<int:complaint_id>/', views.complaint_detail, name='complaint_detail'),
     
     # User profile

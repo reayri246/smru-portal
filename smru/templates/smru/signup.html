@@ -14,7 +14,7 @@
                         <p class="text-muted">Join the SMRU College Portal community</p>
                     </div>
 
-                    <form method="post" novalidate>
+                    <form method="post" enctype="multipart/form-data" novalidate>
                         {% csrf_token %}
                         
                         <div class="row">
@@ -35,14 +35,161 @@
                         </div>
 
                         <div class="mb-3">
-                            <label for="id_username" class="form-label">Username</label>
+                            <label for="id_username" class="form-label">Username <span class="text-danger">*</span></label>
                             {{ form.username }}
                             {% if form.username.errors %}
                             <div class="invalid-feedback d-block">{{ form.username.errors }}</div>
                             {% endif %}
-                            <small class="form-text text-muted">
-                                Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.
-                            </small>
+                            <small class="form-text text-muted">Choose a unique username for your account</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="id_role" class="form-label">User Role <span class="text-danger">*</span></label>
+                            {{ form.role }}
+                            {% if form.role.errors %}
+                            <div class="invalid-feedback d-block">{{ form.role.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3" id="departmentField" style="display: none;">
+                            <label for="id_department" class="form-label">Department</label>
+                            {{ form.department }}
+                            {% if form.department.errors %}
+                            <div class="invalid-feedback d-block">{{ form.department.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Student Fields -->
+                        <div id="studentFields" style="display: none;">
+                            <hr>
+                            <h5 class="mb-4">Student Information</h5>
+                            
+                            <div class="mb-3">
+                                <label for="id_college_type" class="form-label">College Type <span class="text-danger">*</span></label>
+                                {{ form.student_college_type }}
+                                {% if form.student_college_type.errors %}
+                                <div class="invalid-feedback d-block">{{ form.student_college_type.errors }}</div>
+                                {% endif %}
+                                <small class="form-text text-muted">Select whether you are from Engineering, Medical, or Other college</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="id_college" class="form-label">College Name <span class="text-danger">*</span></label>
+                                {{ form.college }}
+                                {% if form.college.errors %}
+                                <div class="invalid-feedback d-block">{{ form.college.errors }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3" id="otherCollegeField" style="display: none;">
+                                <label for="id_other_college_name" class="form-label">Other College Name <span class="text-danger">*</span></label>
+                                {{ form.other_college_name }}
+                                {% if form.other_college_name.errors %}
+                                <div class="invalid-feedback d-block">{{ form.other_college_name.errors }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="id_branch" class="form-label">Branch <span class="text-danger">*</span></label>
+                                    {{ form.branch }}
+                                    {% if form.branch.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.branch.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="id_year" class="form-label">Year <span class="text-danger">*</span></label>
+                                    {{ form.year }}
+                                    {% if form.year.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.year.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="id_roll_number" class="form-label">Roll Number <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="id_roll_number" name="roll_number" placeholder="Enter your Roll Number (e.g., CS001)" required>
+                                    <small class="form-text text-muted">Enter your official roll/registration number</small>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="id_hall_ticket" class="form-label">Hall Ticket Number <span class="text-danger">*</span></label>
+                                    {{ form.hall_ticket_number }}
+                                    {% if form.hall_ticket_number.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.hall_ticket_number.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="id_phone" class="form-label">Phone Number <span class="text-danger">*</span></label>
+                                {{ form.phone }}
+                                {% if form.phone.errors %}
+                                <div class="invalid-feedback d-block">{{ form.phone.errors }}</div>
+                                {% endif %}
+                            </div>
+
+                            <hr>
+                            <h5 class="mb-4">ID Proof - Choose One:</h5>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <div class="card border-primary">
+                                        <div class="card-body">
+                                            <h6 class="card-title">
+                                                <i class="fas fa-id-card text-primary"></i> Student ID Card
+                                            </h6>
+                                            <label for="id_id_card" class="form-label">Upload Student ID Card <span class="text-danger">*</span></label>
+                                            {{ form.id_card }}
+                                            {% if form.id_card.errors %}
+                                            <div class="invalid-feedback d-block">{{ form.id_card.errors }}</div>
+                                            {% endif %}
+                                            <small class="form-text text-muted d-block mt-2">
+                                                📷 Tap to take photo or upload from gallery
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="card border-warning">
+                                        <div class="card-body">
+                                            <h6 class="card-title">
+                                                <i class="fas fa-file text-warning"></i> PAN Card
+                                            </h6>
+                                            <label for="id_pan_card" class="form-label">Upload PAN Card <span class="text-danger">*</span></label>
+                                            {{ form.pan_card }}
+                                            {% if form.pan_card.errors %}
+                                            <div class="invalid-feedback d-block">{{ form.pan_card.errors }}</div>
+                                            {% endif %}
+                                            <small class="form-text text-muted d-block mt-2">
+                                                📷 Tap to take photo or upload from gallery
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="id_live_photo" class="form-label">Live Selfie for Verification <span class="text-danger">*</span></label>
+                                {{ form.live_photo }}
+                                {% if form.live_photo.errors %}
+                                <div class="invalid-feedback d-block">{{ form.live_photo.errors }}</div>
+                                {% endif %}
+                                <small class="form-text text-muted d-block mt-2">
+                                    📷 Tap to take a live selfie photo (for identity verification)
+                                </small>
+                            </div>
+
+                            <div class="alert alert-warning">
+                                <strong>⚠️ ID Proof Requirements:</strong>
+                                <ul class="mb-0 mt-2">
+                                    <li><strong>Choose ONE:</strong> Upload either Student ID Card OR PAN Card (not both required)</li>
+                                    <li><strong>Mandatory:</strong> A live selfie photo is required for verification</li>
+                                    <li><strong>Camera Access:</strong> Use your device camera for best quality</li>
+                                    <li><strong>Quality:</strong> Clear and readable images are required for admin approval</li>
+                                    <li><strong>Note:</strong> Do NOT upload Aadhar or other documents - only Student ID or PAN Card</li>
+                                </ul>
+                            </div>
                         </div>
 
                         <div class="mb-3">
@@ -72,7 +219,11 @@
                         <div class="alert alert-info">
                             <strong>Password Requirements:</strong>
                             <ul class="mb-0">
-                                <li>At least 8 characters</li>
+                                <li>At least 8 characters long</li>
+                                <li>At least one uppercase letter (A-Z)</li>
+                                <li>At least one lowercase letter (a-z)</li>
+                                <li>At least one number (0-9)</li>
+                                <li>At least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)</li>
                                 <li>Cannot be entirely numeric</li>
                                 <li>Cannot be too similar to your username</li>
                             </ul>
@@ -104,4 +255,96 @@
         </div>
     </div>
 </div>
+
+<script>
+// Handle role change to show/hide student fields
+document.getElementById('id_role').addEventListener('change', function() {
+    const role = this.value;
+    const departmentField = document.getElementById('departmentField');
+    const studentFields = document.getElementById('studentFields');
+    
+    // Show department field for certain roles
+    if (['hod', 'faculty'].includes(role)) {
+        departmentField.style.display = 'block';
+    } else {
+        departmentField.style.display = 'none';
+    }
+    
+    // Show student fields only for students
+    if (role === 'student') {
+        studentFields.style.display = 'block';
+    } else {
+        studentFields.style.display = 'none';
+    }
+});
+
+// Handle college change to show/hide other college field
+document.getElementById('id_college').addEventListener('change', function() {
+    const college = this.value;
+    const otherCollegeField = document.getElementById('otherCollegeField');
+    const otherCollegeInput = document.getElementById('id_other_college_name');
+    
+    if (college === 'other') {
+        otherCollegeField.style.display = 'block';
+        otherCollegeInput.required = true;
+    } else {
+        otherCollegeField.style.display = 'none';
+        otherCollegeInput.required = false;
+        otherCollegeInput.value = '';
+    }
+});
+
+// Update college list based on selected type
+async function updateCollegeList() {
+    const collegeType = document.getElementById('id_college_type').value;
+    const collegeSelect = document.getElementById('id_college');
+    
+    if (!collegeType) {
+        collegeSelect.innerHTML = '<option value="">Select a College</option>';
+        return;
+    }
+    
+    // Get all college options and filter them
+    const allOptions = Array.from(collegeSelect.querySelectorAll('option'));
+    collegeSelect.innerHTML = '<option value="">Select a College</option>';
+    
+    allOptions.forEach(option => {
+        // You would need to add data attributes to the options for filtering
+        // For now, we're using a simple approach
+        const optionText = option.text.toLowerCase();
+        
+        // Filter based on college type
+        if (collegeType === 'engineering' && !optionText.includes('medical')) {
+            collegeSelect.appendChild(option.cloneNode(true));
+        } else if (collegeType === 'medical' && optionText.includes('medical')) {
+            collegeSelect.appendChild(option.cloneNode(true));
+        } else if (collegeType === 'other') {
+            collegeSelect.appendChild(option.cloneNode(true));
+        }
+    });
+}
+
+// Toggle student fields visibility for input
+function toggleStudentFields() {
+    const role = document.getElementById('id_role').value;
+    const studentFields = document.getElementById('studentFields');
+    
+    if (role === 'student') {
+        studentFields.style.display = 'block';
+    } else {
+        studentFields.style.display = 'none';
+    }
+}
+
+// Trigger change event on page load in case of form errors
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('id_role').dispatchEvent(new Event('change'));
+    
+    // If college type is selected, filter colleges
+    const collegeType = document.getElementById('id_college_type').value;
+    if (collegeType) {
+        updateCollegeList();
+    }
+});
+</script>
 {% endblock %}

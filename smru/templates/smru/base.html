@@ -553,7 +553,12 @@
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:events' %}">Events</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:engineering' %}">Engineering Notes</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:medical' %}">Medical Notes</a></li>
+                    
+                    {% if user.user_role and user.user_role.role in 'hod,chairman,principal,director,faculty,security,admin' %}
+                    <li class="nav-item"><a class="nav-link" href="{% url 'smru:manage_complaints' %}">Manage Complaints</a></li>
+                    {% else %}
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:complaints' %}">Complaints</a></li>
+                    {% endif %}
 
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">

@@ -25,13 +25,13 @@
                         <div class="col-md-6">
                             <p>
                                 <strong><i class="fas fa-user"></i> Name:</strong><br>
-                                {{ complaint.name }}
+                                {{ complaint.user.get_full_name }}
                             </p>
                         </div>
                         <div class="col-md-6">
                             <p>
-                                <strong><i class="fas fa-id-card"></i> Roll Number:</strong><br>
-                                {{ complaint.roll }}
+                                <strong><i class="fas fa-tag"></i> Category:</strong><br>
+                                {{ complaint.category.name }}
                             </p>
                         </div>
                     </div>
@@ -40,14 +40,27 @@
                         <div class="col-md-6">
                             <p>
                                 <strong><i class="fas fa-envelope"></i> Email:</strong><br>
-                                <a href="mailto:{{ complaint.email }}">{{ complaint.email }}</a>
+                                <a href="mailto:{{ complaint.user.email }}">{{ complaint.user.email }}</a>
                             </p>
                         </div>
                         <div class="col-md-6">
                             <p>
-                                <strong><i class="fas fa-phone"></i> Phone:</strong><br>
-                                {% if complaint.phone %}
-                                <a href="tel:{{ complaint.phone }}">{{ complaint.phone }}</a>
+                                <strong><i class="fas fa-calendar"></i> Submitted:</strong><br>
+                                {{ complaint.submitted_at|date:"M d, Y H:i" }}
+                            </p>
+                        </div>
+                    </div>
+
+                    {% if complaint.person %}
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <p>
+                                <strong><i class="fas fa-user-tie"></i> Assigned to:</strong><br>
+                                {{ complaint.person.name }} ({{ complaint.person.designation }})
+                            </p>
+                        </div>
+                    </div>
+                    {% endif %}
                                 {% else %}
                                 <span class="text-muted">Not provided</span>
                                 {% endif %}
@@ -57,7 +70,7 @@
 
                     <p>
                         <strong><i class="fas fa-list"></i> Category:</strong><br>
-                        <span class="badge bg-info">{{ complaint.get_category_display }}</span>
+                        <span class="badge bg-info">{{ complaint.category.name }}</span>
                     </p>
 
                     <hr>
@@ -75,6 +88,41 @@
                         </a>
                     </p>
                     <hr>
+                    {% endif %}
+
+                    <!-- Confirmation Status -->
+                    <h5 class="mb-3">Confirmation Status</h5>
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <p>
+                                <strong>Student Confirmed Solved:</strong>
+                                {% if complaint.is_confirmed_solved_by_student %}
+                                <span class="text-success"><i class="fas fa-check"></i> Yes</span>
+                                {% else %}
+                                <span class="text-danger"><i class="fas fa-times"></i> No</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <p>
+                                <strong>Admin Confirmed Solved:</strong>
+                                {% if complaint.is_confirmed_solved_by_admin %}
+                                <span class="text-success"><i class="fas fa-check"></i> Yes</span>
+                                {% else %}
+                                <span class="text-danger"><i class="fas fa-times"></i> No</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    {% if complaint.is_fully_resolved %}
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle"></i> This complaint has been fully resolved by both student and admin.
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> This complaint is not fully resolved yet.
+                    </div>
                     {% endif %}
 
                     <!-- Timeline -->

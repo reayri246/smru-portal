@@ -74,12 +74,38 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DATABASE_URL = config('DATABASE_URL', default='postgresql://postgres:Rehan@0210_@db.xnqyidvtwqdempiqsypa.supabase.co:5432/postgres')
+from urllib.parse import urlparse
+
+parsed_url = urlparse(DATABASE_URL)
+if parsed_url.scheme.startswith('postgres'):
+    engine = 'django.db.backends.postgresql'
+elif parsed_url.scheme == 'sqlite':
+    engine = 'django.db.backends.sqlite3'
+else:
+    raise ValueError(f'Unsupported DATABASE_URL scheme: {parsed_url.scheme}')
+
+if engine == 'django.db.backends.sqlite3':
+    db_path = parsed_url.path
+    if db_path.startswith('/') and os.name == 'nt' and db_path[2:3] == ':':
+        db_path = db_path[1:]
+    DATABASES = {
+        'default': {
+            'ENGINE': engine,
+            'NAME': BASE_DIR / db_path.lstrip('/'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': engine,
+            'NAME': parsed_url.path.lstrip('/'),
+            'USER': parsed_url.username or '',
+            'PASSWORD': parsed_url.password or '',
+            'HOST': parsed_url.hostname or '',
+            'PORT': parsed_url.port or '',
+        }
+    }
 
 
 # Password validation
@@ -241,6 +267,7 @@ SESSION_COOKIE_AGE = 1209600  # 2 weeks
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # Auto logout when browser is closed
+SESSION_SAVE_EVERY_REQUEST = True  # Keep sessions alive while the admin is actively used
 
 # ======================== FILE UPLOAD ========================
 
