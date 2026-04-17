@@ -14,9 +14,9 @@ class Migration(migrations.Migration):
             """
             -- Create new table with correct schema
             CREATE TABLE smru_loginactivity_new (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                login_time DATETIME NOT NULL,
-                logout_time DATETIME NULL,
+                id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                login_time TIMESTAMP NOT NULL,
+                logout_time TIMESTAMP NULL,
                 ip_address VARCHAR(45) NOT NULL,
                 user_agent TEXT NOT NULL,
                 user_id INTEGER NOT NULL REFERENCES auth_user(id) ON DELETE CASCADE
