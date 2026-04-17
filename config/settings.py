@@ -21,7 +21,7 @@ if os.name == 'nt':
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables
-DEBUG = False
+DEBUG = config('DEBUG', default=False, cast=bool)
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-fhwpq*ws_x+ar5)34&!a%lo2#s1c+d!p8(_0llm%t+t8lmzbdk')
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'smru-portal-4.onrender.com']
 
@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'whitenoise.runserver_nostatic',
     'django.contrib.staticfiles',
     'smru',
 ]
@@ -42,6 +43,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -149,6 +151,9 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 # Use ManifestStaticFilesStorage only in production
 if not DEBUG:
     STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
+
+# WhiteNoise configuration
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
