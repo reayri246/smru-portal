@@ -3,7 +3,7 @@ cachetools==5.5.2
 certifi==2026.2.25
 charset-normalizer==3.4.6
 dj-database-url==2.2.0
-Django==3.2.25
+Django==4.2.16
 google-api-core==2.29.0
 google-api-python-client==2.193.0
 google-auth==2.42.0
