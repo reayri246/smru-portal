@@ -20,7 +20,7 @@ packaging==24.0
 Pillow==10.4.0
 proto-plus==1.27.1
 protobuf==4.24.4
-psycopg2-binary==2.9.9
+psycopg[binary]==3.2.3
 pyasn1==0.5.1
 pyasn1-modules==0.3.0
 pyparsing==3.1.4
