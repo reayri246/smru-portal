@@ -76,7 +76,10 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
-DATABASE_URL = config('DATABASE_URL', default='postgresql://postgres.rdbaiycxqfykiiwszzos:Rehan%40021@aws-1-ap-south-1.pooler.supabase.com:6543/postgres')
+DATABASE_URL = config('DATABASE_URL', default='', cast=str)
+if not DATABASE_URL:
+    DATABASE_URL = 'postgresql://postgres.rdbaiycxqfykiiwszzos:Rehan%40021@aws-1-ap-south-1.pooler.supabase.com:6543/postgres'
+
 from urllib.parse import urlparse
 
 parsed_url = urlparse(DATABASE_URL)
