@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('smru', '0004_fix_loginactivity_schema'),
+        ('smru', '0003_auto_20260414_2342'),
     ]
 
     operations = [
