@@ -71,6 +71,8 @@ class Year(models.Model):
         ('2', '2nd Year'),
         ('3', '3rd Year'),
         ('4', '4th Year'),
+        ('5', '5th Year'),
+        ('6', '6th Year'),
     )
     branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='years')
     name = models.CharField(max_length=50, choices=YEAR_CHOICES)
@@ -203,6 +205,7 @@ class ComplaintCategory(models.Model):
     CATEGORY_TYPE_CHOICES = (
         ('listed_college', 'For Listed Colleges'),
         ('other_college', 'For Other Colleges'),
+        ('both', 'For Both Listed and Other Colleges'),
     )
     
     name = models.CharField(max_length=100)

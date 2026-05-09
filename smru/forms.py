@@ -395,23 +395,27 @@ class ComplaintForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        
+
         if self.user and hasattr(self.user, 'student_profile') and self.user.student_profile:
-            # For students from listed colleges
             if self.user.student_profile.is_from_listed_college:
                 self.fields['category'].queryset = ComplaintCategory.objects.filter(type='listed_college', is_active=True)
             else:
-                # For students from other colleges
                 self.fields['category'].queryset = ComplaintCategory.objects.filter(type='other_college', is_active=True)
         else:
-            # For non-students
             self.fields['category'].queryset = ComplaintCategory.objects.filter(type='other_college', is_active=True)
-        
-        # Filter persons based on selected category
-        if self.instance and hasattr(self.instance, 'category') and self.instance.category:
-            self.fields['person'].queryset = ComplaintPerson.objects.filter(category=self.instance.category, is_active=True)
+
+        category_id = None
+        if self.data.get('category'):
+            category_id = self.data.get('category')
+        elif self.initial.get('category'):
+            category_id = self.initial.get('category')
+        elif self.instance and self.instance.category_id:
+            category_id = self.instance.category_id
+
+        if category_id:
+            self.fields['person'].queryset = ComplaintPerson.objects.filter(category_id=category_id, is_active=True)
         else:
-            self.fields['person'].queryset = ComplaintPerson.objects.none()
+            self.fields['person'].queryset = ComplaintPerson.objects.filter(is_active=True)
 
 
 class StudentProfileForm(forms.ModelForm):

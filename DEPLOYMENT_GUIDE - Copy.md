@@ -103,21 +103,33 @@
 ### Notifications
 1. Welcome to SMRU Portal (High Priority)
 2. Semester Registration Open (High Priority)
+3. Academic Calendar Released (Medium Priority)
+4. Examination Schedule (High Priority)
+5. Hostel Fee Payment Reminder (Medium Priority)
 
 ### Events
 1. **Annual Science Fair** - April 17, 2026 - Main Auditorium
 2. **Sports Championship** - May 2, 2026 - Sports Ground
 3. **Technical Symposium** - May 17, 2026 - Tech Hall
+4. **Cultural Fest** - June 5, 2026 - Open Ground
+5. **Placement Drive** - June 15, 2026 - Conference Hall
+
+### Complaint Categories
+- **Academic Issues**: Course materials, faculty, examinations
+- **Infrastructure**: Classrooms, labs, facilities
+- **Administration**: Fees, certificates, records
+- **Hostel & Transport**: Accommodation, transportation
+- **Other**: General complaints and suggestions
 
 ---
 
 ## 🔧 Technology Stack
 
 **Backend:**
-- Django 3.2.25
+- Django 4.2.16
 - Python 3.7+
-- SQLite (Development)
-- PostgreSQL Ready (Production)
+- SQLite 3 (Development) / PostgreSQL (Production)
+- Pillow 10.4.0 (Image Processing)
 
 **Frontend:**
 - HTML5
@@ -128,7 +140,8 @@
 **Server:**
 - Python Decouple (Configuration Management)
 - Gunicorn (WSGI Server)
-- Pillow (Image Processing)
+- WhiteNoise (Static Files)
+- Nginx (Web Server)
 
 ---
 
@@ -136,20 +149,20 @@
 
 ```
 college_portal/
-├── config/                    # Project Configuration
+├── config/                    # Django Project Configuration
 │   ├── settings.py           # Enhanced production settings
 │   ├── urls.py               # URL routing
 │   ├── wsgi.py               # WSGI configuration
 │   └── asgi.py               # ASGI configuration
 │
-├── smru/                      # Main Application
-│   ├── models.py             # 8 database models
-│   ├── views.py              # 15+ view functions
+├── smru/                      # Main Application Module
+│   ├── models.py             # 12 database models
+│   ├── views.py              # 20+ view functions
 │   ├── forms.py              # 4 form classes
 │   ├── urls.py               # App URL patterns
 │   ├── admin.py              # Admin customization
 │   ├── apps.py               # App configuration
-│   │
+│   ├── tests.py              # Unit tests
 │   ├── migrations/           # Database migrations
 │   │   └── 0001_initial.py   # Initial migration
 │   │
@@ -170,11 +183,16 @@ college_portal/
 │       ├── 404.html          # Error page
 │       └── 500.html          # Error page
 │
+├── static/                   # Static assets
+├── media/                    # User-uploaded files
+├── logs/                     # Application logs
 ├── manage.py                 # Django management script
-├── required requirements.txt  # Python dependencies
+├── requirements.txt          # Python dependencies (25 packages)
 ├── .env.example              # Configuration template
 ├── .gitignore                # Version control ignore
-└── db.sqlite3                # Development database
+├── db.sqlite3                # Development database
+├── COMPLETE_DOCUMENTATION.md # Comprehensive documentation
+└── README.md                 # Project README
 ```
 
 ---

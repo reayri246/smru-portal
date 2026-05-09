@@ -116,16 +116,16 @@ class EventAdmin(admin.ModelAdmin):
 
 @admin.register(Complaint)
 class ComplaintAdmin(admin.ModelAdmin):
-    list_display = ['id', 'user', 'category', 'person', 'status', 'is_fully_resolved', 'submitted_at']
+    list_display = ['id', 'user', 'category', 'person', 'status', 'is_fully_resolved', 'file_uploaded', 'submitted_at']
     list_filter = ['status', 'category', 'submitted_at', 'is_confirmed_solved_by_student', 'is_confirmed_solved_by_admin']
     search_fields = ['user__username', 'user__email', 'complaint_text']
-    readonly_fields = ['submitted_at', 'resolved_at', 'id']
+    readonly_fields = ['submitted_at', 'resolved_at', 'id', 'complaint_detail_display', 'file_detail_display']
     fieldsets = (
         ('Complainant Info', {
-            'fields': ('id', 'user')
+            'fields': ('id', 'user', 'complaint_detail_display')
         }),
         ('Complaint', {
-            'fields': ('category', 'person', 'complaint_text', 'file')
+            'fields': ('category', 'person', 'complaint_text', 'file_detail_display')
         }),
         ('Response', {
             'fields': ('status', 'response', 'feedback', 'is_confirmed_solved_by_student', 'is_confirmed_solved_by_admin', 'cleared_by')
@@ -136,6 +136,87 @@ class ComplaintAdmin(admin.ModelAdmin):
         }),
     )
     actions = ['mark_resolved', 'mark_closed', 'mark_admin_solved']
+    
+    def file_uploaded(self, obj):
+        """Show if file is uploaded with a clickable link"""
+        if obj.file:
+            return format_html(
+                '<a href="{}" target="_blank" style="color: green; text-decoration: none;">✓ Download</a>',
+                obj.file.url
+            )
+        return format_html('<span style="color: red;">✗ No file</span>')
+    file_uploaded.short_description = 'Attachment'
+    
+    def file_detail_display(self, obj):
+        """Display detailed file information with preview"""
+        if not obj.file:
+            return "No file uploaded"
+        
+        import os
+        file_size = obj.file.size
+        file_name = os.path.basename(obj.file.name)
+        file_ext = os.path.splitext(file_name)[1].lower()
+        
+        # Convert bytes to human readable format
+        if file_size < 1024:
+            size_str = f"{file_size} B"
+        elif file_size < 1024 * 1024:
+            size_str = f"{file_size / 1024:.2f} KB"
+        else:
+            size_str = f"{file_size / (1024 * 1024):.2f} MB"
+        
+        # Check if file is an image
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+        is_image = file_ext in image_extensions
+        
+        html = f"""
+        <div style="background: #f9f9f9; padding: 15px; border: 1px solid #ddd; border-radius: 5px; font-size: 13px;">
+            <h4>📎 Attached Document</h4>
+            <table style="width: 100%; margin-top: 10px;">
+                <tr>
+                    <td style="padding: 5px;"><strong>File Name:</strong></td>
+                    <td style="padding: 5px;"><code>{file_name}</code></td>
+                </tr>
+                <tr>
+                    <td style="padding: 5px;"><strong>File Size:</strong></td>
+                    <td style="padding: 5px;">{size_str}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 5px;"><strong>File Type:</strong></td>
+                    <td style="padding: 5px;">{file_ext or "Unknown"}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 5px;"><strong>Download:</strong></td>
+                    <td style="padding: 5px;"><a href="{obj.file.url}" target="_blank" style="color: #0066cc; text-decoration: underline;">Click here to download →</a></td>
+                </tr>
+            </table>
+        """
+        
+        # If it's an image, show preview
+        if is_image:
+            html += f"""
+            <h4 style="margin-top: 15px;">📷 File Preview</h4>
+            <div style="margin-top: 10px;">
+                <img src="{obj.file.url}" style="max-width: 400px; max-height: 300px; border: 2px solid #0066cc; padding: 10px; background: white;">
+            </div>
+            """
+        
+        html += "</div>"
+        return format_html(html)
+    file_detail_display.short_description = 'Uploaded Document Details'
+    
+    def complaint_detail_display(self, obj):
+        """Display complaint details in a formatted way"""
+        html = f"""
+        <div style="background: #e8f4f8; padding: 10px; border-left: 4px solid #0066cc; border-radius: 3px; font-size: 13px;">
+            <strong>📝 Complaint Text:</strong><br>
+            <div style="margin-top: 8px; padding: 10px; background: white; border-radius: 3px; border: 1px solid #ccc; line-height: 1.6;">
+                {obj.complaint_text}
+            </div>
+        </div>
+        """
+        return format_html(html)
+    complaint_detail_display.short_description = 'Complaint Details'
     
     def is_fully_resolved(self, obj):
         return obj.is_fully_resolved

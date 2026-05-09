@@ -38,6 +38,24 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'smru',
 ]
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [BASE_DIR / 'smru' / 'templates'],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.csrf',
+            ],
+        },
+    },
+]
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
@@ -76,41 +94,12 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
-DATABASE_URL = config('DATABASE_URL', default='', cast=str)
-if not DATABASE_URL:
-    DATABASE_URL = 'postgresql://postgres.rdbaiycxqfykiiwszzos:Rehan%40021@aws-1-ap-south-1.pooler.supabase.com:6543/postgres'
-
-from urllib.parse import urlparse
-
-parsed_url = urlparse(DATABASE_URL)
-if parsed_url.scheme.startswith('postgres'):
-    engine = 'django.db.backends.postgresql'
-elif parsed_url.scheme == 'sqlite':
-    engine = 'django.db.backends.sqlite3'
-else:
-    raise ValueError(f'Unsupported DATABASE_URL scheme: {parsed_url.scheme}')
-
-if engine == 'django.db.backends.sqlite3':
-    db_path = parsed_url.path
-    if db_path.startswith('/') and os.name == 'nt' and db_path[2:3] == ':':
-        db_path = db_path[1:]
-    DATABASES = {
-        'default': {
-            'ENGINE': engine,
-            'NAME': BASE_DIR / db_path.lstrip('/'),
-        }
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': engine,
-            'NAME': parsed_url.path.lstrip('/'),
-            'USER': parsed_url.username or '',
-            'PASSWORD': parsed_url.password or '',
-            'HOST': parsed_url.hostname or '',
-            'PORT': parsed_url.port or '',
-        }
-    }
+}
 
 
 # Password validation
@@ -169,7 +158,10 @@ SECURE_HSTS_PRELOAD = config('SECURE_HSTS_PRELOAD', default=False, cast=bool)
 SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
 SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=False, cast=bool)
 CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=False, cast=bool)
-CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
+
+# CSRF Configuration - includes production domain by default
+csrf_origins = config('CSRF_TRUSTED_ORIGINS', default='https://smru-portal-4.onrender.com,http://localhost:8000,http://127.0.0.1:8000', cast=Csv())
+CSRF_TRUSTED_ORIGINS = csrf_origins if csrf_origins else ['https://smru-portal-4.onrender.com', 'http://localhost:8000', 'http://127.0.0.1:8000']
 
 # Additional Security
 SECURE_BROWSER_XSS_FILTER = True
@@ -251,6 +243,11 @@ EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@collegeportal.com')
+
+# Optional Twilio WhatsApp integration for complaint notifications
+TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='')
+TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='')
+TWILIO_WHATSAPP_FROM = config('TWILIO_WHATSAPP_FROM', default='')
 
 # ======================== PAGINATION ========================
 

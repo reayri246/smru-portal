@@ -46,6 +46,12 @@
                         </div>
 
                         <div class="mb-3">
+                            <label for="id_person" class="form-label">Assigned Person <span class="text-danger">*</span></label>
+                            {{ form.person }}
+                            <small class="form-text text-muted">Select the responsible person for this category.</small>
+                        </div>
+
+                        <div class="mb-3">
                             <label for="id_complaint_text" class="form-label">Complaint Details <span class="text-danger">*</span></label>
                             {{ form.complaint_text }}
                             <small class="form-text text-muted">Please provide detailed information about your complaint.</small>

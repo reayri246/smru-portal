@@ -4,9 +4,9 @@
 
 ### System Requirements
 - Ubuntu 20.04+ or similar Linux distribution
-- Python 3.8+
+- Python 3.7+
 - Nginx web server
-- PostgreSQL database
+- SQLite3 database (Development) / PostgreSQL (Production)
 - Supervisor for process management
 
 ### Step 1: Server Environment Setup
@@ -17,24 +17,47 @@ sudo apt update
 sudo apt upgrade -y
 
 # Install dependencies
-sudo apt install -y python3 python3-pip python3-venv postgresql nginx supervisor git
+sudo apt install -y python3 python3-pip python3-venv nginx supervisor git sqlite3
 ```
 
 ### Step 2: Database Setup
 
+#### Option 1: SQLite (Recommended for small deployments)
 ```bash
-# Login to PostgreSQL
-sudo -u postgres psql
+# SQLite is file-based and requires no additional setup
+# The database file will be created automatically
+```
+
+#### Option 2: PostgreSQL (Recommended for production)
+```bash
+# Install PostgreSQL
+sudo apt install -y postgresql postgresql-contrib
+
+# Start PostgreSQL service
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
 
 # Create database and user
+sudo -u postgres psql
+
+# Run these commands in PostgreSQL shell:
 CREATE DATABASE college_portal;
-CREATE USER college_user WITH PASSWORD 'strong_password_here';
-ALTER ROLE college_user SET client_encoding TO 'utf8';
-ALTER ROLE college_user SET default_transaction_isolation TO 'read committed';
-ALTER ROLE college_user SET default_transaction_deferrable TO on;
-ALTER ROLE college_user SET default_transaction_level TO 'read committed';
-GRANT ALL PRIVILEGES ON DATABASE college_portal TO college_user;
+CREATE USER portal_user WITH PASSWORD 'secure_password_here';
+ALTER ROLE portal_user SET client_encoding TO 'utf8';
+ALTER ROLE portal_user SET default_transaction_isolation TO 'read committed';
+ALTER ROLE portal_user SET default_transaction_deferrable TO on;
+ALTER ROLE portal_user SET default_transaction_level TO 'read committed';
+GRANT ALL PRIVILEGES ON DATABASE college_portal TO portal_user;
 \q
+```
+
+#### Environment Configuration
+```bash
+# For SQLite (default):
+# No DATABASE_URL needed - uses local db.sqlite3
+
+# For PostgreSQL, set in .env:
+echo "DATABASE_URL=postgresql://portal_user:secure_password_here@localhost:5432/college_portal" >> .env
 ```
 
 ### Step 3: Application Setup

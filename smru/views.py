@@ -8,9 +8,15 @@ from django.db.models import Q
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.urls import reverse
+from django.core.cache import cache
+from django.conf import settings
+from django.core.mail import send_mail
+from urllib.parse import quote_plus
 import logging
 import secrets
 import hashlib
+import time
+import requests
 
 from .models import (College, Notification, Event, Complaint, StudentProfile, 
                      Branch, Year, Subject, UserRole, LoginRequest, LoginActivity, 
@@ -19,6 +25,111 @@ from .forms import (SignUpForm, LoginForm, ComplaintForm, StudentProfileForm,
                     ForgotPasswordForm, ResetPasswordForm)
 
 logger = logging.getLogger('smru')
+
+# Rate limiting constants
+LOGIN_ATTEMPTS_LIMIT = 5  # Maximum login attempts
+LOGIN_ATTEMPTS_TIMEOUT = 900  # 15 minutes in seconds
+LOGIN_ATTEMPTS_CACHE_KEY_PREFIX = 'login_attempts_'
+
+# ======================== RATE LIMITING HELPERS ========================
+
+def get_client_ip(request):
+    """Get the client IP address from the request"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
+
+def is_rate_limited(identifier):
+    """Check if the identifier (IP or username) is rate limited"""
+    cache_key = f"{LOGIN_ATTEMPTS_CACHE_KEY_PREFIX}{identifier}"
+    attempts = cache.get(cache_key, 0)
+    return attempts >= LOGIN_ATTEMPTS_LIMIT
+
+def increment_login_attempts(identifier):
+    """Increment login attempts for the identifier"""
+    cache_key = f"{LOGIN_ATTEMPTS_CACHE_KEY_PREFIX}{identifier}"
+    attempts = cache.get(cache_key, 0) + 1
+    cache.set(cache_key, attempts, LOGIN_ATTEMPTS_TIMEOUT)
+
+def reset_login_attempts(identifier):
+    """Reset login attempts for the identifier (on successful login)"""
+    cache_key = f"{LOGIN_ATTEMPTS_CACHE_KEY_PREFIX}{identifier}"
+    cache.delete(cache_key)
+
+def get_remaining_attempts(identifier):
+    """Get remaining login attempts for the identifier"""
+    cache_key = f"{LOGIN_ATTEMPTS_CACHE_KEY_PREFIX}{identifier}"
+    attempts = cache.get(cache_key, 0)
+    return max(0, LOGIN_ATTEMPTS_LIMIT - attempts)
+
+# ======================== NOTIFICATION HELPERS ========================
+
+def send_email_notification(subject, message, recipient_email):
+    """Send an email notification if an email address is available."""
+    if not recipient_email:
+        return False
+    from_email = settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER
+    try:
+        send_mail(
+            subject,
+            message,
+            from_email,
+            [recipient_email],
+            fail_silently=False,
+        )
+        logger.info(f"Complaint notification email sent to {recipient_email}")
+        return True
+    except Exception as e:
+        logger.error(f"Error sending complaint email to {recipient_email}: {str(e)}")
+        return False
+
+
+def send_whatsapp_message(phone_number, message):
+    """Send or prepare a WhatsApp notification for the recipient."""
+    if not phone_number:
+        return None
+
+    formatted_number = phone_number.strip().replace('+', '').replace(' ', '')
+    encoded_message = quote_plus(message)
+    whatsapp_url = f"https://wa.me/{formatted_number}?text={encoded_message}"
+
+    account_sid = getattr(settings, 'TWILIO_ACCOUNT_SID', '')
+    auth_token = getattr(settings, 'TWILIO_AUTH_TOKEN', '')
+    whatsapp_from = getattr(settings, 'TWILIO_WHATSAPP_FROM', '')
+
+    if account_sid and auth_token and whatsapp_from:
+        try:
+            api_url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
+            payload = {
+                'From': whatsapp_from,
+                'To': f'whatsapp:+{formatted_number}',
+                'Body': message,
+            }
+            response = requests.post(api_url, data=payload, auth=(account_sid, auth_token), timeout=15)
+            response.raise_for_status()
+            logger.info(f"WhatsApp notification sent to {phone_number} via Twilio")
+            return whatsapp_url
+        except Exception as exc:
+            logger.error(f"Error sending WhatsApp notification to {phone_number}: {str(exc)}")
+            logger.info(f"Fallback to WhatsApp link: {whatsapp_url}")
+            return whatsapp_url
+
+    logger.info(f"WhatsApp notification prepared for {phone_number}: {whatsapp_url}")
+    return whatsapp_url
+
+
+def create_system_notification(title, description, link=None, priority='high'):
+    """Create an in-app notification record."""
+    Notification.objects.create(
+        title=title,
+        description=description,
+        link=link,
+        priority=priority,
+        is_active=True,
+    )
 
 # ======================== AUTHENTICATION VIEWS ========================
 
@@ -89,14 +200,42 @@ def signup(request):
 
 
 def login_view(request):
-    """User login view - check LoginRequest approval for students"""
+    """User login view - check LoginRequest approval for students with rate limiting for non-staff users"""
     if request.user.is_authenticated:
         return redirect('smru:home')
+    
+    client_ip = get_client_ip(request)
     
     if request.method == 'POST':
         form = LoginForm(request.POST)
         if form.is_valid():
             username_or_email = form.cleaned_data['username']
+            
+            # Check if rate limiting should apply
+            # First, try to get the user to check if they're staff/admin
+            user_to_check = None
+            try:
+                # Try to find user by username first
+                user_to_check = User.objects.get(username=username_or_email)
+            except User.DoesNotExist:
+                try:
+                    # Try to find user by email
+                    user_to_check = User.objects.get(email=username_or_email)
+                except User.DoesNotExist:
+                    pass
+            
+            # Apply rate limiting only for non-staff users
+            should_rate_limit = True
+            if user_to_check and (user_to_check.is_staff or user_to_check.is_superuser):
+                should_rate_limit = False
+            
+            if should_rate_limit:
+                # Check rate limiting for non-staff users
+                if is_rate_limited(client_ip):
+                    remaining_time = LOGIN_ATTEMPTS_TIMEOUT // 60  # Convert to minutes
+                    messages.error(request, f'Too many failed login attempts. Please try again in {remaining_time} minutes.')
+                    return render(request, 'smru/login.html', {'form': form})
+            
             password = form.cleaned_data['password']
             
             # Try to authenticate by username first, then by email
@@ -109,6 +248,10 @@ def login_view(request):
                     user = None
             
             if user is not None:
+                # Reset login attempts on successful login for non-staff users
+                if should_rate_limit:
+                    reset_login_attempts(client_ip)
+                
                 # Check if user is active
                 if not user.is_active:
                     messages.error(request, 'Your account is deactivated. Please contact admin.')
@@ -161,7 +304,16 @@ def login_view(request):
                 next_url = request.GET.get('next', 'smru:home')
                 return redirect(next_url)
             else:
-                messages.error(request, 'Invalid username/email or password.')
+                # Increment login attempts for failed login (only for non-staff users)
+                if should_rate_limit:
+                    increment_login_attempts(client_ip)
+                    remaining_attempts = get_remaining_attempts(client_ip)
+                    if remaining_attempts > 0:
+                        messages.error(request, f'Invalid username/email or password. {remaining_attempts} attempts remaining.')
+                    else:
+                        messages.error(request, 'Invalid username/email or password. Account temporarily locked due to too many failed attempts.')
+                else:
+                    messages.error(request, 'Invalid username/email or password.')
     else:
         form = LoginForm()
     
@@ -480,6 +632,56 @@ def complaints(request):
             complaint.user = request.user
             complaint.save()
             logger.info(f"New complaint created: ID={complaint.id}, User={request.user.username}")
+
+            # Notify the selected complaint person
+            try:
+                student_name = request.user.get_full_name() or request.user.username
+                complaint_url = request.build_absolute_uri(reverse('smru:complaint_detail', args=[complaint.id]))
+                complaint_link_text = complaint_url
+
+                if complaint.person:
+                    person = complaint.person
+                    subject = f"New complaint assigned: #{complaint.id}"
+                    message_body = (
+                        f"A new complaint has been submitted and assigned to you.\n\n"
+                        f"Complaint ID: {complaint.id}\n"
+                        f"Category: {complaint.category.name}\n"
+                        f"Student: {student_name} ({request.user.email})\n"
+                        f"Complaint Details:\n{complaint.complaint_text}\n\n"
+                    )
+                    if complaint.file:
+                        file_url = request.build_absolute_uri(complaint.file.url)
+                        message_body += f"Attachment: {file_url}\n\n"
+                    message_body += f"View complaint: {complaint_link_text}\n"
+
+                    send_email_notification(subject, message_body, person.email)
+                    whatsapp_link = send_whatsapp_message(person.whatsapp_number, message_body)
+
+                    notification_description = (
+                        f"A new complaint #{complaint.id} was submitted by {student_name} and assigned to {person.name}. "
+                        f"Email sent to {person.email if person.email else 'N/A'}. "
+                        f"WhatsApp message {'prepared' if whatsapp_link else 'not sent'}."
+                    )
+                else:
+                    whatsapp_link = None
+                    notification_description = (
+                        f"A new complaint #{complaint.id} was submitted by {student_name}, "
+                        f"but no assigned complaint person was selected. "
+                        f"Email and WhatsApp notifications were not sent."
+                    )
+
+                if complaint.file:
+                    notification_description += " Attachment was included."
+
+                create_system_notification(
+                    title=(f"New complaint assigned to {complaint.person.name}" if complaint.person else f"New complaint #{complaint.id} submitted"),
+                    description=notification_description,
+                    link=complaint_link_text,
+                    priority='high',
+                )
+            except Exception as exc:
+                logger.error(f"Error while sending complaint notifications: {str(exc)}")
+
             messages.success(request, 'Your complaint has been submitted successfully! Reference ID: {}'.format(complaint.id))
             return redirect('smru:complaints')
         else:
