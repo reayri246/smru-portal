@@ -143,6 +143,16 @@ class SignUpForm(UserCreationForm):
         })
     )
     
+    roll_number = forms.CharField(
+        max_length=50,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Enter your Roll Number (e.g., CS001)',
+            'id': 'id_roll_number'
+        })
+    )
+    
     id_card = forms.ImageField(
         required=False,
         widget=forms.FileInput(attrs={
@@ -331,6 +341,18 @@ class ForgotPasswordForm(forms.Form):
             'class': 'form-check-input'
         }),
         label='How should we send the reset link?'
+    )
+
+
+class OtpVerificationForm(forms.Form):
+    otp = forms.CharField(
+        max_length=6,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Enter the 6-digit OTP',
+            'autocomplete': 'one-time-code'
+        }),
+        label='OTP'
     )
 
 

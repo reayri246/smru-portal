@@ -75,7 +75,18 @@
             color: white !important;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.75rem;
+        }
+
+        .brand-logo {
+            max-height: 70px;
+            max-width: 70px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(255,255,255,0.45);
+            background: #fff;
         }
 
         .navbar-brand i {
@@ -121,6 +132,12 @@
         .card-img-top {
             object-fit: cover;
             height: 200px;
+            width: 100%;
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
         }
 
         /* Alerts */
@@ -463,8 +480,24 @@
             }
 
             .hero-section::before {
-                width: 300px;
-                height: 300px;
+                width: 280px;
+                height: 280px;
+            }
+
+            .navbar-brand {
+                font-size: 1.25rem;
+                flex-wrap: wrap;
+            }
+
+            .brand-logo {
+                max-width: 55px;
+                max-height: 55px;
+            }
+
+            .nav-link {
+                margin: 0.25rem 0.35rem;
+                padding: 0.45rem 0.75rem;
+                white-space: normal;
             }
         }
 
@@ -478,7 +511,7 @@
             }
 
             .hero-section {
-                padding: 2.5rem 1.5rem;
+                padding: 2.5rem 1.2rem;
             }
 
             .hero-section h1 {
@@ -487,6 +520,65 @@
 
             .hero-section p {
                 font-size: 1rem;
+            }
+
+            .navbar {
+                padding: 0.75rem 0;
+            }
+
+            .navbar-nav {
+                width: 100%;
+            }
+
+            .navbar-nav .nav-item {
+                width: 100%;
+            }
+
+            .navbar-nav .nav-link {
+                padding-left: 0.75rem;
+                padding-right: 0.75rem;
+            }
+
+            .brand-logo {
+                max-width: 50px;
+                max-height: 50px;
+            }
+
+            .hero-section::before {
+                display: none;
+            }
+
+            footer .col-md-4 {
+                margin-bottom: 1.5rem;
+            }
+
+            .container-fluid {
+                padding-left: 0.8rem;
+                padding-right: 0.8rem;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .navbar-brand {
+                font-size: 1.1rem;
+            }
+
+            .nav-link {
+                font-size: 0.95rem;
+            }
+
+            .brand-logo {
+                max-width: 45px;
+                max-height: 45px;
+            }
+
+            .btn {
+                width: 100%;
+            }
+
+            .card-body,
+            .card-header {
+                padding: 1rem;
             }
         }
 
@@ -541,7 +633,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
         <div class="container-fluid">
             <a class="navbar-brand" href="{% url 'smru:home' %}">
-                <i class="fas fa-graduation-cap"></i>
+                <img src="https://yt3.googleusercontent.com/NbCLFD5gyhswvy4qGsI-2WhPBwQ_rpSIZ-ZDDVr1Pa_lQVucwiDgIeukAWmpbD9Y41G09L_oBw=s900-c-k-c0x00ffffff-no-rj" alt="SMRU Logo" class="brand-logo me-2">
                 SMRU Portal
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -551,7 +643,11 @@
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:home' %}">Home</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:notifications' %}">Notifications</a></li>
+                    {% if user.user_role and user.user_role.role in 'hod,chairman,principal,director,faculty,security,admin' %}
+                    <li class="nav-item"><a class="nav-link" href="{% url 'smru:staff_notifications' %}">Assigned Notifications</a></li>
+                    {% endif %}
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:events' %}">Events</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'smru:notes' %}">Study Notes</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:engineering' %}">Engineering Notes</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:medical' %}">Medical Notes</a></li>
                     
@@ -614,6 +710,7 @@
                         <li><a href="{% url 'smru:home' %}">Home</a></li>
                         <li><a href="{% url 'smru:notifications' %}">Notifications</a></li>
                         <li><a href="{% url 'smru:events' %}">Events</a></li>
+                        <li><a href="{% url 'smru:team' %}">Team</a></li>
                         <li><a href="{% url 'smru:complaints' %}">Complaints</a></li>
                     </ul>
                 </div>
@@ -629,8 +726,9 @@
             <hr style="border-color: rgba(255,255,255,0.1);">
             <div class="text-center">
                 <p>&copy; 2026 SMRU College Portal. All rights reserved. | 
-                <a href="#">Privacy Policy</a> | 
-                <a href="#">Terms of Service</a></p>
+                <a href="{% url 'smru:privacy_policy' %}">Privacy Policy</a> | 
+                <a href="{% url 'smru:terms_of_service' %}">Terms of Service</a></p>
+                <a href="{% url 'smru:team' %}">Developed by SMRU</a>
             </div>
         </div>
     </footer>

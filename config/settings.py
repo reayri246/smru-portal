@@ -22,8 +22,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables
 DEBUG = config('DEBUG', default=False, cast=bool)
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-fhwpq*ws_x+ar5)34&!a%lo2#s1c+d!p8(_0llm%t+t8lmzbdk')
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'smru-portal-4.onrender.com']
+SECRET_KEY = config('SECRET_KEY')
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=Csv())
+
+# Database environment variables (for cloud deployment)
+# Add these to your .env file or environment variables:
+# DATABASE_ENGINE=django.db.backends.postgresql
+# DATABASE_NAME=your_database_name
+# DATABASE_USER=your_database_user
+# DATABASE_PASSWORD=your_database_password
+# DATABASE_HOST=your_database_host
+# DATABASE_PORT=5432
+# DATABASE_URL=postgresql://user:password@host:port/database (for Heroku-style URLs)
 
 
 # Application definition
@@ -94,12 +104,117 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
+# Dynamic database configuration using environment variables
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': config('DATABASE_ENGINE', default='django.db.backends.sqlite3'),
+        'NAME': config('DATABASE_NAME', default=str(BASE_DIR / 'db.sqlite3')),
+        'USER': config('DATABASE_USER', default=''),
+        'PASSWORD': config('DATABASE_PASSWORD', default=''),
+        'HOST': config('DATABASE_HOST', default=''),
+        'PORT': config('DATABASE_PORT', default=''),
     }
 }
+
+# For PostgreSQL (recommended for production)
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'your_database_name',          # Database name
+#         'USER': 'your_database_user',          # Database username
+#         'PASSWORD': 'your_database_password',  # Database password
+#         'HOST': 'your_database_host',          # Database host (e.g., 'localhost', 'db.yourproject.cloud')
+#         'PORT': '5432',                        # Database port (default: 5432 for PostgreSQL)
+#         'OPTIONS': {
+#             'sslmode': 'require',              # For cloud databases with SSL
+#         },
+#     }
+# }
+
+# For MySQL/MariaDB
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': 'your_database_name',          # Database name
+#         'USER': 'your_database_user',          # Database username
+#         'PASSWORD': 'your_database_password',  # Database password
+#         'HOST': 'your_database_host',          # Database host
+#         'PORT': '3306',                        # Database port (default: 3306 for MySQL)
+#         'OPTIONS': {
+#             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+#         },
+#     }
+# }
+
+# For AWS RDS PostgreSQL
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'your_rds_db_name',
+#         'USER': 'your_rds_username',
+#         'PASSWORD': 'your_rds_password',
+#         'HOST': 'your-rds-instance.region.rds.amazonaws.com',
+#         'PORT': '5432',
+#     }
+# }
+
+# For Google Cloud SQL PostgreSQL
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'your_cloudsql_db_name',
+#         'USER': 'your_cloudsql_username',
+#         'PASSWORD': 'your_cloudsql_password',
+#         'HOST': '/cloudsql/your-project:region:instance-name',  # For App Engine
+#         # OR
+#         # 'HOST': '127.0.0.1',  # For Cloud Run with proxy
+#         'PORT': '5432',
+#     }
+# }
+
+# For Heroku PostgreSQL (using DATABASE_URL environment variable)
+# import dj_database_url
+# DATABASES = {
+#     'default': dj_database_url.config(
+#         default=config('DATABASE_URL', default='sqlite:///db.sqlite3')
+#     )
+# }
+
+# For DigitalOcean Managed Database
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'your_do_db_name',
+#         'USER': 'your_do_username',
+#         'PASSWORD': 'your_do_password',
+#         'HOST': 'your-do-db-host.db.ondigitalocean.com',
+#         'PORT': '25060',  # Default DO managed DB port
+#         'OPTIONS': {
+#             'sslmode': 'require',
+#         },
+#     }
+# }
+
+# Dynamic database configuration using environment variables
+# Uncomment the code below to use environment variables for database configuration
+# DATABASES = {
+#     'default': {
+#         'ENGINE': config('DATABASE_ENGINE', default='django.db.backends.sqlite3'),
+#         'NAME': config('DATABASE_NAME', default=str(BASE_DIR / 'db.sqlite3')),
+#         'USER': config('DATABASE_USER', default=''),
+#         'PASSWORD': config('DATABASE_PASSWORD', default=''),
+#         'HOST': config('DATABASE_HOST', default=''),
+#         'PORT': config('DATABASE_PORT', default=''),
+#     }
+# }
+
+# Alternative: Using DATABASE_URL for Heroku, Render, etc.
+# import dj_database_url
+# DATABASES = {
+#     'default': dj_database_url.config(
+#         default=config('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')
+#     )
+# }
 
 
 # Password validation
@@ -236,13 +351,13 @@ if not os.path.exists(LOGS_DIR):
 
 # ======================== EMAIL CONFIGURATION ========================
 
-EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
-EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
-EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@collegeportal.com')
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = config('EMAIL_HOST')
+EMAIL_PORT = config('EMAIL_PORT', cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
 
 # Optional Twilio WhatsApp integration for complaint notifications
 TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='')
@@ -280,8 +395,8 @@ MAX_UPLOAD_SIZE = 5242880
 # ======================== AUTHENTICATION ========================
 
 LOGIN_URL = 'smru:login'
-LOGIN_REDIRECT_URL = 'home'
-LOGOUT_REDIRECT_URL = 'home'
+LOGIN_REDIRECT_URL = 'smru:home'
+LOGOUT_REDIRECT_URL = 'smru:home'
 
 # ======================== TIMEZONE ========================
 

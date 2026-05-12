@@ -20,6 +20,11 @@ A comprehensive Django-based college management portal that provides students wi
 - Secure password hashing
 - SSL/TLS Support
 - Environment-based configuration
+- Rate limiting for login attempts
+- Daily login limits with account locking
+- Secure admin panel with role-based access
+- Database backups with compression
+- Audit logging for all user activities
 
 ### 📊 Admin Features
 - Beautiful custom admin dashboard
@@ -91,7 +96,55 @@ To allow other users to view all complaints:
 
 Authorized users will see **"All Complaints"** in their navigation menu.
 
-## �🚀 Quick Start
+## 🔐 Security Implementation
+
+### Environment Variables
+All sensitive configuration is managed through environment variables:
+- Database credentials
+- Secret keys
+- Security settings
+- Email configuration
+
+Copy `.env.example` to `.env` and configure your settings.
+
+### Rate Limiting
+- **Wrong Password Attempts**: 5 failed attempts lock account for 30 minutes
+- **Daily Login Limit**: Maximum 5 successful logins per user per day
+- **Account Lock**: Exceeding daily limit locks account for 1 hour
+
+### Admin Protection
+- Custom secure admin site with role-based access
+- Only superusers and users with 'admin' role can access admin panel- **Custom branding**: Admin login page displays "SMRU PORTAL ADMINISTRATOR"- Audit logging for all administrative actions
+To assign admin role to a user:
+```bash
+python manage.py set_user_role <username> admin
+```
+
+Example:
+```bash
+python manage.py set_user_role Mohammad_Rehan admin
+```
+### Database Backups
+Automated backup system supporting SQLite and PostgreSQL:
+```bash
+# Create backup
+python manage.py backup_db
+
+# Create compressed backup
+python manage.py backup_db --compress
+
+# Custom output directory
+python manage.py backup_db --output /path/to/backups
+```
+
+### ORM Usage
+The application uses Django ORM exclusively:
+- No raw SQL queries in views or models
+- All database operations through Django's ORM
+- Automatic SQL injection prevention
+- Database abstraction for multiple backends
+
+## 🚀 Quick Start
 
 ### Prerequisites
 - Python 3.8+
@@ -409,7 +462,10 @@ This project is proprietary and confidential.
 
 **Last Updated**: April 2026
 **Version**: 1.0.0-production
-#   s m r u  
- #   s m r u  
- #   s m r u - p o r t a l  
+#   s m r u 
+ 
+ #   s m r u 
+ 
+ #   s m r u - p o r t a l 
+ 
  

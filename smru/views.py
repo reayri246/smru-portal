@@ -8,6 +8,7 @@ from django.db.models import Q
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.urls import reverse
+from django.http import JsonResponse
 from django.core.cache import cache
 from django.conf import settings
 from django.core.mail import send_mail
@@ -20,15 +21,15 @@ import requests
 
 from .models import (College, Notification, Event, Complaint, StudentProfile, 
                      Branch, Year, Subject, UserRole, LoginRequest, LoginActivity, 
-                     ComplaintCategory, ComplaintPerson, PasswordResetRequest)
+                     ComplaintCategory, ComplaintPerson, PasswordResetRequest, UserAccountLock)
 from .forms import (SignUpForm, LoginForm, ComplaintForm, StudentProfileForm,
-                    ForgotPasswordForm, ResetPasswordForm)
+                    ForgotPasswordForm, ResetPasswordForm, OtpVerificationForm)
 
 logger = logging.getLogger('smru')
 
 # Rate limiting constants
 LOGIN_ATTEMPTS_LIMIT = 5  # Maximum login attempts
-LOGIN_ATTEMPTS_TIMEOUT = 900  # 15 minutes in seconds
+LOGIN_ATTEMPTS_TIMEOUT = 1800  # 30 minutes in seconds
 LOGIN_ATTEMPTS_CACHE_KEY_PREFIX = 'login_attempts_'
 
 # ======================== RATE LIMITING HELPERS ========================
@@ -43,27 +44,35 @@ def get_client_ip(request):
     return ip
 
 def is_rate_limited(identifier):
-    """Check if the identifier (IP or username) is rate limited"""
+    """Check if the identifier is rate limited."""
     cache_key = f"{LOGIN_ATTEMPTS_CACHE_KEY_PREFIX}{identifier}"
     attempts = cache.get(cache_key, 0)
     return attempts >= LOGIN_ATTEMPTS_LIMIT
 
 def increment_login_attempts(identifier):
-    """Increment login attempts for the identifier"""
+    """Increment login attempts for the identifier."""
     cache_key = f"{LOGIN_ATTEMPTS_CACHE_KEY_PREFIX}{identifier}"
     attempts = cache.get(cache_key, 0) + 1
     cache.set(cache_key, attempts, LOGIN_ATTEMPTS_TIMEOUT)
 
 def reset_login_attempts(identifier):
-    """Reset login attempts for the identifier (on successful login)"""
+    """Reset login attempts for the identifier (on successful login)."""
     cache_key = f"{LOGIN_ATTEMPTS_CACHE_KEY_PREFIX}{identifier}"
     cache.delete(cache_key)
 
 def get_remaining_attempts(identifier):
-    """Get remaining login attempts for the identifier"""
+    """Get remaining login attempts for the identifier."""
     cache_key = f"{LOGIN_ATTEMPTS_CACHE_KEY_PREFIX}{identifier}"
     attempts = cache.get(cache_key, 0)
     return max(0, LOGIN_ATTEMPTS_LIMIT - attempts)
+
+def get_login_identifier(username_or_email, user=None):
+    """Return a stable identifier for login throttling."""
+    if user:
+        return f"user:{user.username.strip().lower()}"
+    if username_or_email:
+        return f"input:{username_or_email.strip().lower()}"
+    return 'user:unknown'
 
 # ======================== NOTIFICATION HELPERS ========================
 
@@ -121,7 +130,7 @@ def send_whatsapp_message(phone_number, message):
     return whatsapp_url
 
 
-def create_system_notification(title, description, link=None, priority='high'):
+def create_system_notification(title, description, link=None, priority='high', is_public=True, recipient_user=None, recipient_email=None):
     """Create an in-app notification record."""
     Notification.objects.create(
         title=title,
@@ -129,6 +138,9 @@ def create_system_notification(title, description, link=None, priority='high'):
         link=link,
         priority=priority,
         is_active=True,
+        is_public=is_public,
+        recipient_user=recipient_user,
+        recipient_email=recipient_email,
     )
 
 # ======================== AUTHENTICATION VIEWS ========================
@@ -156,6 +168,7 @@ def signup(request):
                 college_obj = form.cleaned_data.get('college')
                 other_college_name = form.cleaned_data.get('other_college_name', '')
                 hall_ticket = form.cleaned_data.get('hall_ticket_number', '')
+                roll_number = form.cleaned_data.get('roll_number', '')
                 
                 # Handle "Other" college case
                 if college_obj == 'other':
@@ -168,7 +181,7 @@ def signup(request):
                 
                 StudentProfile.objects.create(
                     user=user,
-                    roll_number=user.username,
+                    roll_number=roll_number,
                     hall_ticket_number=hall_ticket,
                     college_name=college_name,
                     college=college_obj,
@@ -196,64 +209,70 @@ def signup(request):
     else:
         form = SignUpForm()
     
-    return render(request, 'smru/signup.html', {'form': form})
+    # Get filtered colleges if college type is selected
+    college_type = request.POST.get('student_college_type') if request.method == 'POST' else ''
+    filtered_colleges = []
+    if college_type and college_type != 'other':
+        filtered_colleges = College.objects.filter(type=college_type)
+    
+    return render(request, 'smru/signup.html', {
+        'form': form,
+        'filtered_colleges': filtered_colleges,
+        'selected_college_type': college_type
+    })
 
 
 def login_view(request):
-    """User login view - check LoginRequest approval for students with rate limiting for non-staff users"""
+    """User login view - enforce global per-account lockout after repeated login attempts."""
     if request.user.is_authenticated:
         return redirect('smru:home')
-    
-    client_ip = get_client_ip(request)
     
     if request.method == 'POST':
         form = LoginForm(request.POST)
         if form.is_valid():
             username_or_email = form.cleaned_data['username']
-            
-            # Check if rate limiting should apply
-            # First, try to get the user to check if they're staff/admin
+            password = form.cleaned_data['password']
+
+            # Determine user identity for global lockout tracking
             user_to_check = None
             try:
-                # Try to find user by username first
                 user_to_check = User.objects.get(username=username_or_email)
             except User.DoesNotExist:
                 try:
-                    # Try to find user by email
                     user_to_check = User.objects.get(email=username_or_email)
                 except User.DoesNotExist:
-                    pass
+                    user_to_check = None
+
+            login_identifier = get_login_identifier(username_or_email, user=user_to_check)
+            if is_rate_limited(login_identifier):
+                remaining_time = LOGIN_ATTEMPTS_TIMEOUT // 60  # Convert to minutes
+                messages.error(request, f'Too many login attempts. This account is locked for {remaining_time} minutes.')
+                return render(request, 'smru/login.html', {'form': form})
             
-            # Apply rate limiting only for non-staff users
-            should_rate_limit = True
-            if user_to_check and (user_to_check.is_staff or user_to_check.is_superuser):
-                should_rate_limit = False
-            
-            if should_rate_limit:
-                # Check rate limiting for non-staff users
-                if is_rate_limited(client_ip):
-                    remaining_time = LOGIN_ATTEMPTS_TIMEOUT // 60  # Convert to minutes
-                    messages.error(request, f'Too many failed login attempts. Please try again in {remaining_time} minutes.')
+            # Check account lock status
+            if user_to_check:
+                account_lock, created = UserAccountLock.objects.get_or_create(user=user_to_check)
+                if account_lock.is_account_locked():
+                    remaining_time = int((account_lock.unlock_at - timezone.now()).total_seconds() // 60)
+                    messages.error(request, f'Account is temporarily locked due to excessive login attempts. Try again in {remaining_time} minutes.')
                     return render(request, 'smru/login.html', {'form': form})
-            
-            password = form.cleaned_data['password']
+                
+                # Check daily login limit
+                if not account_lock.can_login_today():
+                    account_lock.lock_account('Exceeded daily login limit', 60)  # Lock for 1 hour
+                    messages.error(request, 'You have exceeded the maximum number of logins allowed per day. Account locked for 1 hour.')
+                    return render(request, 'smru/login.html', {'form': form})
             
             # Try to authenticate by username first, then by email
             user = authenticate(request, username=username_or_email, password=password)
-            if user is None:
-                try:
-                    user = User.objects.get(email=username_or_email)
-                    user = authenticate(request, username=user.username, password=password)
-                except User.DoesNotExist:
-                    user = None
-            
+            if user is None and user_to_check is not None:
+                user = authenticate(request, username=user_to_check.username, password=password)
+
             if user is not None:
-                # Reset login attempts on successful login for non-staff users
-                if should_rate_limit:
-                    reset_login_attempts(client_ip)
-                
                 # Check if user is active
                 if not user.is_active:
+                    increment_login_attempts(login_identifier)
+                    remaining_attempts = get_remaining_attempts(login_identifier)
                     messages.error(request, 'Your account is deactivated. Please contact admin.')
                     return render(request, 'smru/login.html', {'form': form})
                 
@@ -263,9 +282,11 @@ def login_view(request):
                     try:
                         login_request = LoginRequest.objects.get(user=user)
                         if login_request.status == 'pending':
+                            increment_login_attempts(login_identifier)
                             messages.warning(request, 'Your login request is pending admin approval. Please wait.')
                             return render(request, 'smru/login.html', {'form': form})
                         elif login_request.status == 'rejected':
+                            increment_login_attempts(login_identifier)
                             messages.error(request, 'Your login request has been rejected. Please contact admin for details.')
                             return render(request, 'smru/login.html', {'form': form})
                     except LoginRequest.DoesNotExist:
@@ -273,6 +294,7 @@ def login_view(request):
 
                     # Check if student profile is approved
                     if hasattr(user, 'student_profile') and not user.student_profile.is_approved:
+                        increment_login_attempts(login_identifier)
                         messages.error(request, 'Your profile is pending admin approval. Please wait for final approval.')
                         return render(request, 'smru/login.html', {'form': form})
                 
@@ -281,6 +303,14 @@ def login_view(request):
                     messages.error(request, 'Your profile is incomplete. Please contact admin.')
                     return render(request, 'smru/login.html', {'form': form})
                 
+                # Reset login attempts now that the account is fully allowed to login
+                reset_login_attempts(login_identifier)
+
+                # Increment daily login count
+                if user_to_check:
+                    account_lock, created = UserAccountLock.objects.get_or_create(user=user_to_check)
+                    account_lock.increment_daily_login()
+
                 # User can login
                 login(request, user)
                 
@@ -304,16 +334,13 @@ def login_view(request):
                 next_url = request.GET.get('next', 'smru:home')
                 return redirect(next_url)
             else:
-                # Increment login attempts for failed login (only for non-staff users)
-                if should_rate_limit:
-                    increment_login_attempts(client_ip)
-                    remaining_attempts = get_remaining_attempts(client_ip)
-                    if remaining_attempts > 0:
-                        messages.error(request, f'Invalid username/email or password. {remaining_attempts} attempts remaining.')
-                    else:
-                        messages.error(request, 'Invalid username/email or password. Account temporarily locked due to too many failed attempts.')
+                # Increment login attempts for failed login or blocked account
+                increment_login_attempts(login_identifier)
+                remaining_attempts = get_remaining_attempts(login_identifier)
+                if remaining_attempts > 0:
+                    messages.error(request, f'Invalid username/email or password. {remaining_attempts} attempts remaining.')
                 else:
-                    messages.error(request, 'Invalid username/email or password.')
+                    messages.error(request, f'Invalid username/email or password. Account temporarily locked for {LOGIN_ATTEMPTS_TIMEOUT // 60} minutes due to multiple attempts.')
     else:
         form = LoginForm()
     
@@ -363,27 +390,58 @@ def forgot_password(request):
                 return redirect('smru:forgot_password')
             
             if user:
-                # Generate secure token
+                # Generate secure token and OTP
                 token = secrets.token_urlsafe(32)
-                
-                # Create password reset request
+                otp = f"{secrets.randbelow(900000) + 100000}"
                 reset_request = PasswordResetRequest.objects.create(
                     user=user,
                     token=token,
+                    otp=otp,
                     reset_method=reset_method,
                     expires_at=timezone.now() + timezone.timedelta(hours=24)
                 )
-                
-                # TODO: Implement actual email/WhatsApp sending here
-                # For now, just show success message
-                logger.info(f"Password reset requested for user: {user.username}, method: {reset_method}")
-                messages.success(request, f'A password reset link has been sent to your {reset_method}.')
-                
-                # In a real application, you would send here
-                # - Email with link containing token
-                # - WhatsApp message with link containing token
-            
-            return redirect('smru:login')
+
+                reset_url = request.build_absolute_uri(reverse('smru:reset_password', args=[token]))
+                subject = 'SMRU College Portal Password Reset OTP'
+                message_body = (
+                    f"Hello {user.get_full_name() or user.username},\n\n"
+                    "A password reset request was received for your account. "
+                    f"Use the following OTP to verify the reset request:\n\nOTP: {otp}\n\n"
+                    f"Then open the reset page: {reset_url}\n\n"
+                    "This OTP expires in 24 hours. If you did not request a password reset, please ignore this message.\n\n"
+                    "Thank you,\nSMRU College Portal Team"
+                )
+
+                if reset_method == 'email':
+                    if not user.email:
+                        logger.warning(f"Password reset requested by user {user.username} but no email is available")
+                        messages.error(request, 'No email address is available for this account.')
+                        return redirect('smru:forgot_password')
+
+                    if send_email_notification(subject, message_body, user.email):
+                        logger.info(f"Password reset OTP sent to email {user.email} for user {user.username}")
+                        messages.success(request, 'An OTP has been sent to your email. Enter the OTP on the reset page.')
+                        return redirect('smru:reset_password', token=token)
+                    logger.error(f"Failed to send password reset OTP email to {user.email} for user {user.username}")
+                    messages.error(request, 'Unable to send password reset OTP email at this time. Please try again later.')
+                    return redirect('smru:forgot_password')
+
+                phone_number = ''
+                if hasattr(user, 'student_profile') and user.student_profile.phone:
+                    phone_number = user.student_profile.phone
+                if not phone_number:
+                    logger.warning(f"Password reset requested by user {user.username} but no WhatsApp number is available")
+                    messages.error(request, 'No WhatsApp number is available for this account.')
+                    return redirect('smru:forgot_password')
+
+                whatsapp_link = send_whatsapp_message(phone_number, message_body)
+                if whatsapp_link:
+                    logger.info(f"Password reset OTP WhatsApp link prepared for {phone_number} user {user.username}")
+                    return redirect(whatsapp_link)
+
+                logger.error(f"Failed to prepare WhatsApp reset OTP for {phone_number} user {user.username}")
+                messages.error(request, 'Unable to send WhatsApp OTP at this time. Please try again later.')
+                return redirect('smru:forgot_password')
     else:
         form = ForgotPasswordForm()
     
@@ -391,41 +449,55 @@ def forgot_password(request):
 
 
 def reset_password(request, token):
-    """Reset password view - user enters new password with token"""
+    """Reset password view - user enters OTP and then a new password"""
     try:
         reset_request = PasswordResetRequest.objects.get(token=token)
         
-        # Check if token is expired
         if reset_request.is_expired or reset_request.status != 'pending':
-            messages.error(request, 'Password reset link has expired. Please request a new one.')
+            messages.error(request, 'Password reset request has expired. Please request a new one.')
             return redirect('smru:forgot_password')
-        
     except PasswordResetRequest.DoesNotExist:
-        messages.error(request, 'Invalid password reset link.')
+        messages.error(request, 'Invalid password reset request.')
         return redirect('smru:forgot_password')
-    
+
     if request.method == 'POST':
-        form = ResetPasswordForm(request.POST)
-        if form.is_valid():
-            new_password = form.cleaned_data['new_password']
-            user = reset_request.user
-            
-            # Update password
-            user.set_password(new_password)
-            user.save()
-            
-            # Mark reset request as completed
-            reset_request.status = 'completed'
-            reset_request.completed_at = timezone.now()
-            reset_request.save()
-            
-            logger.info(f"Password reset completed for user: {user.username}")
-            messages.success(request, 'Your password has been reset successfully. You can now login with your new password.')
-            return redirect('smru:login')
+        if not reset_request.otp_verified:
+            otp_form = OtpVerificationForm(request.POST)
+            password_form = None
+            if otp_form.is_valid():
+                entered_otp = otp_form.cleaned_data['otp'].strip()
+                if entered_otp == reset_request.otp:
+                    reset_request.otp_verified = True
+                    reset_request.save()
+                    messages.success(request, 'OTP verified. Please enter your new password.')
+                    return redirect('smru:reset_password', token=token)
+                otp_form.add_error('otp', 'OTP did not match. Please try again.')
+        else:
+            otp_form = None
+            password_form = ResetPasswordForm(request.POST)
+            if password_form.is_valid():
+                new_password = password_form.cleaned_data['new_password']
+                user = reset_request.user
+                user.set_password(new_password)
+                user.save()
+
+                reset_request.status = 'completed'
+                reset_request.completed_at = timezone.now()
+                reset_request.save()
+
+                logger.info(f"Password reset completed for user: {user.username}")
+                messages.success(request, 'Your password has been reset successfully. You can now login with your new password.')
+                return redirect('smru:login')
     else:
-        form = ResetPasswordForm()
-    
-    return render(request, 'smru/reset_password.html', {'form': form, 'token': token})
+        otp_form = None if reset_request.otp_verified else OtpVerificationForm()
+        password_form = ResetPasswordForm() if reset_request.otp_verified else None
+
+    return render(request, 'smru/reset_password.html', {
+        'otp_form': otp_form,
+        'form': password_form,
+        'token': token,
+        'otp_verified': reset_request.otp_verified,
+    })
 
 
 # ======================== HOME & MAIN PAGES ========================
@@ -436,7 +508,8 @@ def home(request):
     try:
         colleges = College.objects.all()
         notifications = Notification.objects.filter(
-            is_active=True
+            is_active=True,
+            is_public=True,
         ).exclude(
             expires_at__lt=timezone.now()
         ).order_by('-created_at')[:5]
@@ -465,7 +538,8 @@ def notifications_view(request):
     """All notifications page with pagination"""
     try:
         notifications = Notification.objects.filter(
-            is_active=True
+            is_active=True,
+            is_public=True,
         ).exclude(
             expires_at__lt=timezone.now()
         ).order_by('-created_at')
@@ -479,10 +553,44 @@ def notifications_view(request):
             'notifications': page_obj,
             'paginator': paginator,
             'page_obj': page_obj,
+            'is_paginated': page_obj.has_other_pages(),
         })
     except Exception as e:
         logger.error(f"Error in notifications view: {str(e)}")
         return render(request, 'smru/notifications.html', {'error': 'Could not load notifications'})
+
+
+@login_required(login_url='smru:login')
+def staff_notifications_view(request):
+    """Staff-only notifications assigned to the logged-in user."""
+    staff_roles = ['hod', 'chairman', 'principal', 'director', 'faculty', 'security', 'admin']
+    if not (hasattr(request.user, 'user_role') and request.user.user_role.role in staff_roles):
+        messages.warning(request, 'You do not have access to assigned notifications.')
+        return redirect('smru:home')
+
+    try:
+        notifications = Notification.objects.filter(
+            is_active=True,
+            is_public=False,
+        ).exclude(
+            expires_at__lt=timezone.now()
+        ).filter(
+            Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
+        ).order_by('-created_at')
+        
+        paginator = Paginator(notifications, 10)
+        page_number = request.GET.get('page', 1)
+        page_obj = paginator.get_page(page_number)
+        
+        return render(request, 'smru/staff_notifications.html', {
+            'notifications': page_obj,
+            'paginator': paginator,
+            'page_obj': page_obj,
+            'is_paginated': page_obj.has_other_pages(),
+        })
+    except Exception as e:
+        logger.error(f"Error in staff notifications view: {str(e)}")
+        return render(request, 'smru/staff_notifications.html', {'error': 'Could not load staff notifications'})
 
 
 def events_view(request):
@@ -511,7 +619,48 @@ def events_view(request):
         return render(request, 'smru/events.html', {'error': 'Could not load events'})
 
 
-# ======================== STUDY MATERIALS ========================
+def notes(request):
+    """Unified notes page - College type and college selection"""
+    try:
+        college_type = request.GET.get('type', 'engineering')  # Default to engineering
+        colleges_list = College.objects.filter(type=college_type)
+        college_id = request.GET.get('college')
+        branch_id = request.GET.get('branch')
+        year_id = request.GET.get('year')
+        
+        branches = []
+        years = []
+        subjects = []
+        
+        if college_id:
+            try:
+                college = College.objects.get(id=college_id, type=college_type)
+                branches = college.branches.all()
+                
+                if branch_id:
+                    branch = branches.get(id=branch_id)
+                    years = branch.years.all()
+                    
+                    if year_id:
+                        year = years.get(id=year_id)
+                        subjects = year.subjects.all()
+            except (College.DoesNotExist, Branch.DoesNotExist, Year.DoesNotExist):
+                messages.error(request, 'Invalid selection.')
+        
+        return render(request, 'smru/notes.html', {
+            'college_types': [('engineering', 'Engineering'), ('medical', 'Medical')],
+            'colleges': colleges_list,
+            'branches': branches,
+            'years': years,
+            'subjects': subjects,
+            'selected_type': college_type,
+            'selected_college': college_id,
+            'selected_branch': branch_id,
+            'selected_year': year_id,
+        })
+    except Exception as e:
+        logger.error(f"Error in notes view: {str(e)}")
+        return render(request, 'smru/notes.html', {'error': 'Error loading materials'})
 
 def engineering_notes(request):
     """Engineering notes - Branch and subject selection"""
@@ -531,11 +680,49 @@ def engineering_notes(request):
                 branches = college.branches.all()
                 
                 if branch_id:
-                    branch = Branch.objects.get(id=branch_id)
+                    branch = branches.get(id=branch_id)
                     years = branch.years.all()
                     
                     if year_id:
-                        year = Year.objects.get(id=year_id)
+                        year = years.get(id=year_id)
+                        subjects = year.subjects.all()
+            except (College.DoesNotExist, Branch.DoesNotExist, Year.DoesNotExist):
+                messages.error(request, 'Invalid selection.')
+        
+        return render(request, 'smru/engineering.html', {
+            'colleges': colleges_list,
+            'branches': branches,
+            'years': years,
+            'subjects': subjects,
+            'selected_college': college_id,
+            'selected_branch': branch_id,
+            'selected_year': year_id,
+        })
+    except Exception as e:
+        logger.error(f"Error in engineering_notes view: {str(e)}")
+        return render(request, 'smru/engineering.html', {'error': 'Error loading materials'})
+    """Engineering notes - Branch and subject selection"""
+    try:
+        colleges_list = College.objects.filter(type='engineering')
+        college_id = request.GET.get('college')
+        branch_id = request.GET.get('branch')
+        year_id = request.GET.get('year')
+        
+        branches = []
+        years = []
+        subjects = []
+        
+        if college_id:
+            try:
+                college = College.objects.get(id=college_id, type='engineering')
+                branches = college.branches.all()
+                
+                if branch_id:
+                    branch = branches.get(id=branch_id)
+                    years = branch.years.all()
+                    
+                    if year_id:
+                        year = years.get(id=year_id)
                         subjects = year.subjects.all()
             except (College.DoesNotExist, Branch.DoesNotExist, Year.DoesNotExist):
                 messages.error(request, 'Invalid selection.')
@@ -572,11 +759,11 @@ def medical_notes(request):
                 branches = college.branches.all()
                 
                 if branch_id:
-                    branch = Branch.objects.get(id=branch_id)
+                    branch = branches.get(id=branch_id)
                     years = branch.years.all()
                     
                     if year_id:
-                        year = Year.objects.get(id=year_id)
+                        year = years.get(id=year_id)
                         subjects = year.subjects.all()
             except (College.DoesNotExist, Branch.DoesNotExist, Year.DoesNotExist):
                 messages.error(request, 'Invalid selection.')
@@ -618,6 +805,42 @@ def student_files(request):
     except Exception as e:
         logger.error(f"Error in student_files view: {str(e)}")
         return render(request, 'smru/student_files.html', {'error': 'Error loading files'})
+
+
+def team(request):
+    """Team page showing portal contributors."""
+    team_members = [
+        {'name': 'Mohammed Rehan', 'roll_number': '24D01A66T6', 'role': 'Backend Developer'},
+        {'name': 'Mohammed Aftab', 'roll_number': '24D01A66T7', 'role': 'Backend Developer'},
+        {'name': 'Mohammed Junaid Hussain', 'roll_number': '24D01A66T8', 'role': 'Backend Developer'},
+        {'name': 'P.Manasa', 'roll_number': '24D01A66U2', 'role': 'Frontend Developer'},
+        {'name': 'P.Pranathi Reddy', 'roll_number': '24D01A66U3', 'role': 'Frontend Developer'},
+    
+    ]
+    return render(request, 'smru/team.html', {
+        'team_members': team_members,
+    })
+
+
+def get_colleges_by_type(request):
+    """AJAX endpoint to get colleges filtered by type"""
+    college_type = request.GET.get('type', '')
+    colleges = College.objects.filter(type=college_type) if college_type else College.objects.all()
+    
+    college_data = [{'id': college.id, 'name': college.name} for college in colleges]
+    college_data.append({'id': 'other', 'name': 'Other'})
+    
+    return JsonResponse({'colleges': college_data})
+
+
+def privacy_policy(request):
+    """Privacy policy informational page."""
+    return render(request, 'smru/privacy_policy.html')
+
+
+def terms_of_service(request):
+    """Terms of service informational page."""
+    return render(request, 'smru/terms_of_service.html')
 
 
 # ======================== COMPLAINTS ========================
@@ -673,11 +896,15 @@ def complaints(request):
                 if complaint.file:
                     notification_description += " Attachment was included."
 
+                recipient_user = User.objects.filter(email=person.email).first() if complaint.person and complaint.person.email else None
                 create_system_notification(
                     title=(f"New complaint assigned to {complaint.person.name}" if complaint.person else f"New complaint #{complaint.id} submitted"),
                     description=notification_description,
                     link=complaint_link_text,
                     priority='high',
+                    is_public=False,
+                    recipient_user=recipient_user,
+                    recipient_email=complaint.person.email if complaint.person and complaint.person.email else None,
                 )
             except Exception as exc:
                 logger.error(f"Error while sending complaint notifications: {str(exc)}")
@@ -703,7 +930,7 @@ def my_complaints(request):
             user=request.user
         ).order_by('-submitted_at')
         
-        # Handle POST requests for marking as solved
+        # Handle POST requests for student confirmation of solved complaints
         if request.method == 'POST':
             complaint_id = request.POST.get('complaint_id')
             action = request.POST.get('action')
@@ -711,9 +938,12 @@ def my_complaints(request):
             if complaint_id and action == 'mark_solved':
                 try:
                     complaint = Complaint.objects.get(id=complaint_id, user=request.user)
-                    complaint.is_confirmed_solved_by_student = True
-                    complaint.save()
-                    messages.success(request, 'Complaint marked as solved by you.')
+                    if complaint.status in ['resolved', 'closed']:
+                        complaint.is_confirmed_solved_by_student = True
+                        complaint.save()
+                        messages.success(request, 'Thank you. You have confirmed this complaint is solved and you are satisfied with the resolution.')
+                    else:
+                        messages.error(request, 'You can confirm this complaint only after it is resolved or closed.')
                 except Complaint.DoesNotExist:
                     messages.error(request, 'Complaint not found.')
             
@@ -745,11 +975,20 @@ def manage_complaints(request):
     
     try:
         # Filter complaints based on role
-        if user_role.role in ['hod', 'chairman', 'principal', 'director', 'faculty', 'security']:
-            # Get complaints assigned to persons in categories relevant to this role
-            complaints = Complaint.objects.filter(
-                person__designation__icontains=user_role.get_role_display()
-            ).order_by('-submitted_at')
+        if user_role.role in ['hod', 'chairman', 'principal', 'director', 'faculty', 'security', 'anti_ragging_team', 'she_team']:
+            # Get complaints assigned to this user through ComplaintPerson or by matching email if user is not linked.
+            complaints = Complaint.objects.none()
+            complaint_person = None
+
+            if hasattr(request.user, 'complaint_person'):
+                complaint_person = request.user.complaint_person
+
+            if complaint_person:
+                complaints = Complaint.objects.filter(person=complaint_person).order_by('-submitted_at')
+            elif request.user.email:
+                complaints = Complaint.objects.filter(person__email=request.user.email).order_by('-submitted_at')
+            else:
+                complaints = Complaint.objects.none()
         elif user_role.role == 'admin':
             complaints = Complaint.objects.all().order_by('-submitted_at')
         else:
@@ -812,10 +1051,12 @@ def manage_complaints(request):
         return render(request, 'smru/manage_complaints.html', {'error': 'Could not load complaints'})
 
 
+@login_required(login_url='smru:login')
 def complaint_detail(request, complaint_id):
     """View single complaint status"""
     try:
         complaint = get_object_or_404(Complaint, id=complaint_id)
+
         # Check if user has permission to view this complaint
         if request.user != complaint.user and not request.user.is_staff:
             try:
@@ -823,14 +1064,32 @@ def complaint_detail(request, complaint_id):
                 if user_role.role not in ['hod', 'chairman', 'principal', 'director', 'faculty', 'security', 'admin']:
                     messages.error(request, 'You do not have permission to view this complaint.')
                     return redirect('smru:home')
-            except AttributeError:
+            except:
                 messages.error(request, 'Your role is not configured.')
                 return redirect('smru:home')
-        
+
+        if request.method == 'POST' and request.user == complaint.user:
+            action = request.POST.get('action')
+            if action == 'mark_solved':
+                if complaint.status in ['resolved', 'closed']:
+                    if request.POST.get('confirm_solved') == '1':
+                        if not complaint.is_confirmed_solved_by_student:
+                            complaint.is_confirmed_solved_by_student = True
+                            complaint.save()
+                            messages.success(request, 'You have confirmed the complaint as solved.')
+                        else:
+                            messages.info(request, 'This complaint was already confirmed as solved by you.')
+                    else:
+                        messages.error(request, 'Please check the confirmation box before submitting.')
+                else:
+                    messages.error(request, 'Only resolved or closed complaints can be confirmed as solved.')
+                return redirect('smru:complaint_detail', complaint_id=complaint.id)
+
         return render(request, 'smru/complaint_detail.html', {'complaint': complaint})
     except Exception as e:
         logger.error(f"Error in complaint_detail view: {str(e)}")
-        return redirect('smru:complaints')
+        messages.error(request, 'An error occurred while loading the complaint.')
+        return redirect('smru:my_complaints')
 
 
 # ======================== USER PROFILE ========================

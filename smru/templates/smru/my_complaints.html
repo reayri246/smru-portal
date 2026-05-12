@@ -12,13 +12,14 @@
         {% if complaints %}
         <div class="row">
             <div class="col-12">
-                <table class="table table-hover">
+                <table class="table table-hover text-dark">
                     <thead class="table-light">
                         <tr>
                             <th>#ID</th>
                             <th>Category</th>
                             <th>Submitted</th>
                             <th>Status</th>
+                            <th>Student Confirmed</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -34,21 +35,31 @@
                                 </span>
                             </td>
                             <td>
-                                <div class="btn-group" role="group">
-                                    <a href="{% url 'smru:complaint_detail' complaint.id %}" class="btn btn-sm btn-primary">
-                                        <i class="fas fa-eye"></i> View
-                                    </a>
-                                    {% if complaint.status in 'resolved,closed' and not complaint.is_confirmed_solved_by_student %}
-                                    <form method="post" style="display: inline;">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="complaint_id" value="{{ complaint.id }}">
-                                        <input type="hidden" name="action" value="mark_solved">
-                                        <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Are you sure this complaint is solved?')">
-                                            <i class="fas fa-check"></i> Mark Solved
-                                        </button>
-                                    </form>
-                                    {% endif %}
-                                </div>
+                                {% if complaint.is_confirmed_solved_by_student %}
+                                    <span class="badge bg-success">Yes</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">No</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'smru:complaint_detail' complaint.id %}" class="btn btn-sm btn-primary me-2">
+                                    <i class="fas fa-eye"></i> View
+                                </a>
+                                {% if not complaint.is_confirmed_solved_by_student %}
+                                            <form method="post" class="d-inline"> 
+                                                {% csrf_token %}
+                                                <input type="hidden" name="complaint_id" value="{{ complaint.id }}">
+                                                <input type="hidden" name="action" value="mark_solved">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" value="1" id="confirmSolved{{ complaint.id }}" name="confirm_solved" required {% if complaint.status != 'resolved' and complaint.status != 'closed' %}disabled{% endif %}>
+                                                    <label class="form-check-label" for="confirmSolved{{ complaint.id }}">
+                                                    </label>
+                                                </div>
+                                                <button type="submit" class="btn btn-sm btn-success" {% if complaint.status != 'resolved' and complaint.status != 'closed' %}disabled title="You can confirm only after the complaint is resolved or closed."{% else %}onclick="return confirm('Are you sure this complaint is solved and you confirm it?')"{% endif %}>
+                                                    <i class="fas fa-check"></i> Confirm Problem Solved
+                                                </button>
+                                            </form>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}

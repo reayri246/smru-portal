@@ -1,3 +1,4 @@
+# Core Django and dependencies
 asgiref==3.7.2
 cachetools==5.5.2
 certifi==2026.2.25
@@ -34,3 +35,22 @@ uritemplate==4.1.1
 urllib3==2.0.7
 whitenoise==6.5.0
 zipp==3.15.0
+
+# Database drivers (uncomment as needed for cloud databases)
+
+# For PostgreSQL (recommended for production)
+# psycopg2-binary==2.9.7
+
+# For MySQL/MariaDB
+# mysqlclient==2.1.1
+# OR
+# pymysql==1.0.3
+
+# For database URL parsing (Heroku, etc.)
+# dj-database-url==1.3.0
+
+# For Google Cloud SQL
+# google-cloud-sqlconnector==1.4.3
+
+# For AWS RDS (additional SSL support)
+# ssl==1.16

@@ -18,7 +18,7 @@ class UserRole(models.Model):
         ('other', 'Other'),
     )
     
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='user_role')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='student')
     department = models.CharField(max_length=100, blank=True)  # For HODs, faculty, etc.
     is_active = models.BooleanField(default=True)
@@ -144,6 +144,9 @@ class Notification(models.Model):
     image = models.ImageField(upload_to='notifications/', blank=True, null=True)
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
     is_active = models.BooleanField(default=True)
+    is_public = models.BooleanField(default=True)
+    recipient_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications')
+    recipient_email = models.EmailField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     expires_at = models.DateTimeField(blank=True, null=True)
@@ -154,6 +157,7 @@ class Notification(models.Model):
         indexes = [
             models.Index(fields=['-created_at']),
             models.Index(fields=['is_active']),
+            models.Index(fields=['is_public']),
         ]
 
     def __str__(self):
@@ -225,6 +229,7 @@ class ComplaintCategory(models.Model):
 # Complaint Persons (for sending complaints to specific people)
 class ComplaintPerson(models.Model):
     category = models.ForeignKey(ComplaintCategory, on_delete=models.CASCADE, related_name='persons')
+    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True, related_name='complaint_person')
     name = models.CharField(max_length=100)
     designation = models.CharField(max_length=100)
     email = models.EmailField(blank=True)
@@ -370,6 +375,8 @@ class PasswordResetRequest(models.Model):
     
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     token = models.CharField(max_length=100, unique=True)
+    otp = models.CharField(max_length=6, blank=True, null=True)
+    otp_verified = models.BooleanField(default=False)
     reset_method = models.CharField(max_length=20, choices=[('email', 'Email'), ('whatsapp', 'WhatsApp')])
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     requested_at = models.DateTimeField(auto_now_add=True)
@@ -386,4 +393,56 @@ class PasswordResetRequest(models.Model):
     @property
     def is_expired(self):
         return timezone.now() > self.expires_at
+
+
+# User Account Lock for rate limiting
+class UserAccountLock(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    is_locked = models.BooleanField(default=False)
+    lock_reason = models.CharField(max_length=100, blank=True)
+    locked_at = models.DateTimeField(blank=True, null=True)
+    unlock_at = models.DateTimeField(blank=True, null=True)
+    daily_login_count = models.PositiveIntegerField(default=0)
+    last_login_date = models.DateField(blank=True, null=True)
+
+    class Meta:
+        verbose_name_plural = 'User Account Locks'
+
+    def __str__(self):
+        return f"{self.user.username} - {'Locked' if self.is_locked else 'Unlocked'}"
+
+    def is_account_locked(self):
+        """Check if account is currently locked"""
+        if not self.is_locked:
+            return False
+        if self.unlock_at and timezone.now() > self.unlock_at:
+            self.is_locked = False
+            self.save()
+            return False
+        return True
+
+    def lock_account(self, reason, duration_minutes=60):
+        """Lock the account for specified duration"""
+        self.is_locked = True
+        self.lock_reason = reason
+        self.locked_at = timezone.now()
+        self.unlock_at = timezone.now() + timezone.timedelta(minutes=duration_minutes)
+        self.save()
+
+    def increment_daily_login(self):
+        """Increment daily login count, reset if new day"""
+        today = timezone.now().date()
+        if self.last_login_date != today:
+            self.daily_login_count = 1
+            self.last_login_date = today
+        else:
+            self.daily_login_count += 1
+        self.save()
+
+    def can_login_today(self, max_logins=5):
+        """Check if user can login today based on daily limit"""
+        today = timezone.now().date()
+        if self.last_login_date != today:
+            return True
+        return self.daily_login_count < max_logins
 

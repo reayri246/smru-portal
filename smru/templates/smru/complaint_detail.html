@@ -12,9 +12,9 @@
                 </div>
                 <div class="card-body p-5">
                     <!-- Status -->
-                    <div class="alert alert-{{ complaint.status|default:'secondary' }} mb-4">
+                    <div class="alert alert-{% if complaint.status == 'new' %}primary{% elif complaint.status == 'in_progress' %}warning{% elif complaint.status == 'resolved' %}success{% else %}secondary{% endif %} mb-4">
                         <strong>Status:</strong> 
-                        <span class="badge bg-{{ complaint.status|default:'secondary' }} fs-6">
+                        <span class="badge bg-{% if complaint.status == 'new' %}primary{% elif complaint.status == 'in_progress' %}warning{% elif complaint.status == 'resolved' %}success{% else %}secondary{% endif %} fs-6">
                             {{ complaint.get_status_display }}
                         </span>
                     </div>
@@ -25,13 +25,21 @@
                         <div class="col-md-6">
                             <p>
                                 <strong><i class="fas fa-user"></i> Name:</strong><br>
-                                {{ complaint.user.get_full_name }}
+                                {% if complaint.user %}
+                                    {{ complaint.user.get_full_name }}
+                                {% else %}
+                                    Anonymous
+                                {% endif %}
                             </p>
                         </div>
                         <div class="col-md-6">
                             <p>
                                 <strong><i class="fas fa-tag"></i> Category:</strong><br>
-                                {{ complaint.category.name }}
+                                {% if complaint.category %}
+                                    {{ complaint.category.name }}
+                                {% else %}
+                                    Unknown Category
+                                {% endif %}
                             </p>
                         </div>
                     </div>
@@ -40,7 +48,11 @@
                         <div class="col-md-6">
                             <p>
                                 <strong><i class="fas fa-envelope"></i> Email:</strong><br>
-                                <a href="mailto:{{ complaint.user.email }}">{{ complaint.user.email }}</a>
+                                {% if complaint.user %}
+                                    <a href="mailto:{{ complaint.user.email }}">{{ complaint.user.email }}</a>
+                                {% else %}
+                                    Not provided
+                                {% endif %}
                             </p>
                         </div>
                         <div class="col-md-6">
@@ -64,13 +76,19 @@
 
                     <p>
                         <strong><i class="fas fa-list"></i> Category:</strong><br>
-                        <span class="badge bg-info">{{ complaint.category.name }}</span>
+                        <span class="badge bg-info">
+                            {% if complaint.category %}
+                                {{ complaint.category.name }}
+                            {% else %}
+                                Unknown Category
+                            {% endif %}
+                        </span>
                     </p>
 
                     <hr>
 
                     <h5 class="mb-3">Complaint Description</h5>
-                    <div class="alert alert-light border p-3 mb-4">
+                    <div class="alert alert-light border p-3 mb-4 text-dark">
                         {{ complaint.complaint_text|linebreaks }}
                     </div>
 
@@ -93,7 +111,25 @@
                                 {% if complaint.is_confirmed_solved_by_student %}
                                 <span class="text-success"><i class="fas fa-check"></i> Yes</span>
                                 {% else %}
+                                {% if request.user == complaint.user %}
+                                    {% if complaint.status == 'resolved' or complaint.status == 'closed' %}
+                                    <form method="post" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="mark_solved">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="confirm_solved" id="confirmSolved" value="1" required>
+                                            <label class="form-check-label" for="confirmSolved">
+                                                Complain is solved
+                                            </label>
+                                        </div>
+                                        <button type="submit" class="btn btn-sm btn-success mt-2">Confirm</button>
+                                    </form>
+                                    {% else %}
+                                    <span class="text-danger"><i class="fas fa-times"></i> No</span>
+                                    {% endif %}
+                                {% else %}
                                 <span class="text-danger"><i class="fas fa-times"></i> No</span>
+                                {% endif %}
                                 {% endif %}
                             </p>
                         </div>
@@ -138,14 +174,14 @@
                     {% if complaint.response %}
                     <hr>
                     <h5 class="mb-3">Response from Administration</h5>
-                    <div class="alert alert-success border p-3">
+                    <div class="alert alert-success border p-3 text-dark">
                         {{ complaint.response|linebreaks }}
                     </div>
                     {% endif %}
 
                     <!-- Actions -->
                     <hr>
-                    <div class="row">
+                    <div class="row g-2">
                         <div class="col-md-6">
                             <a href="{% url 'smru:my_complaints' %}" class="btn btn-secondary w-100">
                                 <i class="fas fa-arrow-left"></i> Back to Complaints
@@ -156,6 +192,7 @@
                                 <i class="fas fa-plus"></i> Submit Another
                             </a>
                         </div>
+                    </div>
                     </div>
                 </div>
             </div>

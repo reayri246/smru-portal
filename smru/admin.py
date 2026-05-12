@@ -1,11 +1,52 @@
+from django import forms
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils import timezone
+from django.contrib.admin.sites import AdminSite
+import django.contrib.admin.sites as admin_sites
+from django.contrib.auth.admin import UserAdmin, GroupAdmin
+from django.contrib.auth.models import Group, User
 from .models import (
     College, Branch, Year, Subject, Notification, Event, Complaint, StudentProfile,
     UserRole, ComplaintCategory, ComplaintPerson, LoginRequest, LoginActivity, 
-    Team, TeamMember, PasswordResetRequest
+    Team, TeamMember, PasswordResetRequest, UserAccountLock
 )
+
+
+class SecureAdminSite(AdminSite):
+    """Custom admin site with enhanced security"""
+    site_header = "SMRU PORTAL ADMINISTRATOR"
+    site_title = "SMRU Admin Portal"
+    index_title = "Welcome to SMRU Admin Portal"
+    
+    def has_permission(self, request):
+        """Override to add custom permission checks"""
+        # Check if user is authenticated
+        if not request.user.is_authenticated:
+            return False
+        
+        # Allow superusers
+        if request.user.is_superuser:
+            return True
+            
+        # Check if user has admin role
+        try:
+            user_role = request.user.user_role
+            if user_role.role == 'admin' and user_role.is_active:
+                return True
+        except UserRole.DoesNotExist:
+            pass
+            
+        return False
+
+
+# Create secure admin site
+admin_site = SecureAdminSite(name='secure_admin')
+admin.site = admin_site  # Replace default admin site
+admin_sites.site = admin_site  # Also replace Django's default admin site object used by decorators
+
+admin.site.register(User, UserAdmin)
+admin.site.register(Group, GroupAdmin)
 
 
 @admin.register(College)
@@ -41,13 +82,58 @@ class YearAdmin(admin.ModelAdmin):
     subjects_count.short_description = 'Subjects'
 
 
+class SubjectAdminForm(forms.ModelForm):
+    college = forms.ModelChoiceField(
+        queryset=College.objects.all(),
+        required=False,
+        label='College',
+        help_text='Select the college that owns this subject.'
+    )
+
+    class Meta:
+        model = Subject
+        fields = ['college', 'name', 'code', 'year', 'drive_folder_id', 'drive_link']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and self.instance.year:
+            self.fields['college'].initial = self.instance.year.branch.college
+        selected_college = self.data.get('college') or self.initial.get('college')
+        if selected_college:
+            try:
+                college = College.objects.get(pk=selected_college)
+                self.fields['year'].queryset = Year.objects.filter(branch__college=college)
+            except (College.DoesNotExist, ValueError, TypeError):
+                self.fields['year'].queryset = Year.objects.none()
+        else:
+            self.fields['year'].queryset = Year.objects.all()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        college = cleaned_data.get('college')
+        year = cleaned_data.get('year')
+        if college and year and year.branch.college != college:
+            raise forms.ValidationError('Selected subject year must belong to the chosen college.')
+        return cleaned_data
+
+
 @admin.register(Subject)
 class SubjectAdmin(admin.ModelAdmin):
+    form = SubjectAdminForm
     list_display = ['name', 'code', 'year', 'has_drive_link']
     list_filter = ['year', 'created_at']
     search_fields = ['name', 'code']
     readonly_fields = ['created_at']
-    
+    fieldsets = (
+        (None, {
+            'fields': ('college', 'name', 'code', 'year', 'drive_folder_id', 'drive_link')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+
     def has_drive_link(self, obj):
         if obj.drive_link:
             return format_html('<span style="color: green;">✓</span>')
@@ -57,16 +143,16 @@ class SubjectAdmin(admin.ModelAdmin):
 
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
-    list_display = ['title', 'priority', 'is_active', 'status_badge', 'created_at']
-    list_filter = ['is_active', 'priority', 'created_at']
-    search_fields = ['title', 'description']
+    list_display = ['title', 'priority', 'is_active', 'is_public', 'recipient_user', 'recipient_email', 'status_badge', 'created_at']
+    list_filter = ['is_active', 'is_public', 'priority', 'created_at']
+    search_fields = ['title', 'description', 'recipient_email', 'recipient_user__username']
     readonly_fields = ['created_at', 'updated_at']
     fieldsets = (
         ('Content', {
             'fields': ('title', 'description', 'image')
         }),
         ('Settings', {
-            'fields': ('link', 'priority', 'is_active', 'expires_at')
+            'fields': ('link', 'priority', 'is_active', 'is_public', 'recipient_user', 'recipient_email', 'expires_at')
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
@@ -360,6 +446,19 @@ class TeamAdmin(admin.ModelAdmin):
     list_display = ['name', 'type', 'is_active']
     list_filter = ['type', 'is_active']
     search_fields = ['name', 'description']
+
+
+@admin.register(UserAccountLock)
+class UserAccountLockAdmin(admin.ModelAdmin):
+    list_display = ['user', 'is_locked', 'lock_reason', 'locked_at', 'unlock_at', 'daily_login_count', 'last_login_date']
+    list_filter = ['is_locked', 'locked_at', 'last_login_date']
+    search_fields = ['user__username', 'lock_reason']
+    readonly_fields = ['locked_at']
+    
+    def unlock_accounts(self, request, queryset):
+        count = queryset.update(is_locked=False, lock_reason='', unlock_at=None)
+        self.message_user(request, f'{count} accounts unlocked.')
+    unlock_accounts.short_description = 'Unlock selected accounts'
 
 
 @admin.register(TeamMember)

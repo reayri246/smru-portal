@@ -75,7 +75,17 @@
 
                             <div class="mb-3">
                                 <label for="id_college" class="form-label">College Name <span class="text-danger">*</span></label>
-                                {{ form.college }}
+                                <select name="college" class="form-control" id="id_college">
+                                    <option value="">Select College Type First</option>
+                                    {% if filtered_colleges %}
+                                        {% for college in filtered_colleges %}
+                                        <option value="{{ college.id }}" {% if college.id|stringformat:"s" == form.college.value %}selected{% endif %}>
+                                            {{ college.name }}
+                                        </option>
+                                        {% endfor %}
+                                        <option value="other" {% if 'other' == form.college.value %}selected{% endif %}>Other</option>
+                                    {% endif %}
+                                </select>
                                 {% if form.college.errors %}
                                 <div class="invalid-feedback d-block">{{ form.college.errors }}</div>
                                 {% endif %}
@@ -106,19 +116,13 @@
                                 </div>
                             </div>
 
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="id_roll_number" class="form-label">Roll Number <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" id="id_roll_number" name="roll_number" placeholder="Enter your Roll Number (e.g., CS001)" required>
-                                    <small class="form-text text-muted">Enter your official roll/registration number</small>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="id_hall_ticket" class="form-label">Hall Ticket Number <span class="text-danger">*</span></label>
-                                    {{ form.hall_ticket_number }}
-                                    {% if form.hall_ticket_number.errors %}
-                                    <div class="invalid-feedback d-block">{{ form.hall_ticket_number.errors }}</div>
-                                    {% endif %}
-                                </div>
+                            <div class="mb-3">
+                                <label for="id_roll_number" class="form-label">Roll Number <span class="text-danger">*</span></label>
+                                {{ form.roll_number }}
+                                {% if form.roll_number.errors %}
+                                <div class="invalid-feedback d-block">{{ form.roll_number.errors }}</div>
+                                {% endif %}
+                                <small class="form-text text-muted">Enter your official roll/registration number</small>
                             </div>
 
                             <div class="mb-3">
@@ -232,8 +236,8 @@
                         <div class="mb-3 form-check">
                             <input type="checkbox" class="form-check-input" id="termsCheck" required>
                             <label class="form-check-label" for="termsCheck">
-                                I agree to the <a href="#" target="_blank">Terms of Service</a> and 
-                                <a href="#" target="_blank">Privacy Policy</a>
+                                I agree to the <a href="{% url 'smru:terms_of_service' %}" target="_blank">Terms of Service</a> and 
+                                <a href="{% url 'smru:privacy_policy' %}" target="_blank">Privacy Policy</a>
                             </label>
                         </div>
 
@@ -300,28 +304,38 @@ async function updateCollegeList() {
     const collegeSelect = document.getElementById('id_college');
     
     if (!collegeType) {
-        collegeSelect.innerHTML = '<option value="">Select a College</option>';
+        collegeSelect.innerHTML = '<option value="">Select College Type First</option>';
         return;
     }
     
-    // Get all college options and filter them
-    const allOptions = Array.from(collegeSelect.querySelectorAll('option'));
-    collegeSelect.innerHTML = '<option value="">Select a College</option>';
+    // If colleges are already loaded for this type, don't reload
+    const currentOptions = collegeSelect.querySelectorAll('option');
+    if (currentOptions.length > 1 && collegeType === '{{ selected_college_type|default:"" }}') {
+        return;
+    }
     
-    allOptions.forEach(option => {
-        // You would need to add data attributes to the options for filtering
-        // For now, we're using a simple approach
-        const optionText = option.text.toLowerCase();
+    try {
+        // Show loading state
+        collegeSelect.innerHTML = '<option value="">Loading colleges...</option>';
         
-        // Filter based on college type
-        if (collegeType === 'engineering' && !optionText.includes('medical')) {
-            collegeSelect.appendChild(option.cloneNode(true));
-        } else if (collegeType === 'medical' && optionText.includes('medical')) {
-            collegeSelect.appendChild(option.cloneNode(true));
-        } else if (collegeType === 'other') {
-            collegeSelect.appendChild(option.cloneNode(true));
-        }
-    });
+        // Fetch colleges from API
+        const response = await fetch(`/smru/api/colleges-by-type/?type=${collegeType}`);
+        const data = await response.json();
+        
+        // Clear and populate college dropdown
+        collegeSelect.innerHTML = '<option value="">Select a College</option>';
+        
+        data.colleges.forEach(college => {
+            const option = document.createElement('option');
+            option.value = college.id;
+            option.textContent = college.name;
+            collegeSelect.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error('Error loading colleges:', error);
+        collegeSelect.innerHTML = '<option value="">Error loading colleges</option>';
+    }
 }
 
 // Toggle student fields visibility for input

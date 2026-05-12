@@ -10,10 +10,11 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic.base import RedirectView
 from smru import views as smru_views
+from smru.admin import admin_site  # Import secure admin site
 
 urlpatterns = [
     path('favicon.ico', RedirectView.as_view(url=settings.STATIC_URL + 'smru/favicon.svg', permanent=True)),
-    path('admin/', admin.site.urls),
+    path('admin/', admin_site.urls),  # Use secure admin site
     path('', include('smru.urls')),  # Make sure your app name is 'smru'
 ]
 
