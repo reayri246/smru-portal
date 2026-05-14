@@ -27,6 +27,16 @@ from .forms import (SignUpForm, LoginForm, ComplaintForm, StudentProfileForm,
 
 logger = logging.getLogger('smru')
 
+# ======================== URL BUILDER HELPER ========================
+
+def build_public_url(path):
+    """Build a public URL using SITE_URL setting for email links."""
+    site_url = getattr(settings, 'SITE_URL', 'http://localhost:8000').rstrip('/')
+    if path.startswith('/'):
+        return f"{site_url}{path}"
+    return f"{site_url}/{path}"
+
+
 # Rate limiting constants
 LOGIN_ATTEMPTS_LIMIT = 5  # Maximum login attempts
 LOGIN_ATTEMPTS_TIMEOUT = 1800  # 30 minutes in seconds
@@ -167,7 +177,6 @@ def signup(request):
             if role == 'student':
                 college_obj = form.cleaned_data.get('college')
                 other_college_name = form.cleaned_data.get('other_college_name', '')
-                hall_ticket = form.cleaned_data.get('hall_ticket_number', '')
                 roll_number = form.cleaned_data.get('roll_number', '')
                 
                 # Handle "Other" college case
@@ -182,7 +191,6 @@ def signup(request):
                 StudentProfile.objects.create(
                     user=user,
                     roll_number=roll_number,
-                    hall_ticket_number=hall_ticket,
                     college_name=college_name,
                     college=college_obj,
                     branch_name=form.cleaned_data.get('branch', ''),
@@ -289,11 +297,14 @@ def login_view(request):
                             increment_login_attempts(login_identifier)
                             messages.error(request, 'Your login request has been rejected. Please contact admin for details.')
                             return render(request, 'smru/login.html', {'form': form})
+                        elif login_request.status == 'approved':
+                            if hasattr(user, 'student_profile') and not user.student_profile.is_approved:
+                                user.student_profile.is_approved = True
+                                user.student_profile.save()
                     except LoginRequest.DoesNotExist:
                         login_request = None
 
-                    # Check if student profile is approved
-                    if hasattr(user, 'student_profile') and not user.student_profile.is_approved:
+                    if not login_request and hasattr(user, 'student_profile') and user_role.role == 'student' and not user.student_profile.is_approved:
                         increment_login_attempts(login_identifier)
                         messages.error(request, 'Your profile is pending admin approval. Please wait for final approval.')
                         return render(request, 'smru/login.html', {'form': form})
@@ -401,7 +412,7 @@ def forgot_password(request):
                     expires_at=timezone.now() + timezone.timedelta(hours=24)
                 )
 
-                reset_url = request.build_absolute_uri(reverse('smru:reset_password', args=[token]))
+                reset_url = build_public_url(reverse('smru:reset_password', args=[token]))
                 subject = 'SMRU College Portal Password Reset OTP'
                 message_body = (
                     f"Hello {user.get_full_name() or user.username},\n\n"
@@ -822,15 +833,6 @@ def team(request):
     })
 
 
-def get_colleges_by_type(request):
-    """AJAX endpoint to get colleges filtered by type"""
-    college_type = request.GET.get('type', '')
-    colleges = College.objects.filter(type=college_type) if college_type else College.objects.all()
-    
-    college_data = [{'id': college.id, 'name': college.name} for college in colleges]
-    college_data.append({'id': 'other', 'name': 'Other'})
-    
-    return JsonResponse({'colleges': college_data})
 
 
 def privacy_policy(request):
@@ -859,7 +861,7 @@ def complaints(request):
             # Notify the selected complaint person
             try:
                 student_name = request.user.get_full_name() or request.user.username
-                complaint_url = request.build_absolute_uri(reverse('smru:complaint_detail', args=[complaint.id]))
+                complaint_url = build_public_url(reverse('smru:complaint_detail', args=[complaint.id]))
                 complaint_link_text = complaint_url
 
                 if complaint.person:
@@ -873,7 +875,7 @@ def complaints(request):
                         f"Complaint Details:\n{complaint.complaint_text}\n\n"
                     )
                     if complaint.file:
-                        file_url = request.build_absolute_uri(complaint.file.url)
+                        file_url = build_public_url(complaint.file.url)
                         message_body += f"Attachment: {file_url}\n\n"
                     message_body += f"View complaint: {complaint_link_text}\n"
 
@@ -1125,7 +1127,25 @@ def profile(request):
         return redirect('smru:home')
 
 
-# ======================== ERROR HANDLERS ========================
+# ======================== AJAX VIEWS ========================
+
+@require_http_methods(["GET"])
+def get_colleges_by_type(request):
+    """AJAX endpoint to get colleges filtered by type"""
+    college_type = request.GET.get('type', '')
+    
+    if not college_type:
+        return JsonResponse({'error': 'College type is required'}, status=400)
+    
+    try:
+        colleges = College.objects.filter(type=college_type).values('id', 'name')
+        college_data = list(colleges)
+        # Always include "Other" option
+        college_data.append({'id': 'other', 'name': 'Other'})
+        return JsonResponse({'colleges': college_data})
+    except Exception as e:
+        logger.error(f"Error fetching colleges by type: {str(e)}")
+        return JsonResponse({'error': 'Failed to load colleges'}, status=500)
 
 def error_404(request, exception):
     """404 error handler"""

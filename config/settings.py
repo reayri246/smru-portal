@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 from pathlib import Path
 import os
 from decouple import config, Csv
+from urllib.parse import urlparse
 
 # Monkey patch mimetypes to avoid hanging on Windows registry read
 import mimetypes
@@ -24,6 +25,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = config('DEBUG', default=False, cast=bool)
 SECRET_KEY = config('SECRET_KEY')
 ALLOWED_HOSTS = config('ALLOWED_HOSTS',default='127.0.0.1,localhost', cast=Csv())
+
+# Public site URL for email links (production domain)
+# Set `SITE_URL` in your environment or .env to your public domain, e.g.:
+# SITE_URL=https://smru-portal.onrender.com
+# Default falls back to the production domain so email links are correct
+SITE_URL = config('SITE_URL', default='https://smru-portal.onrender.com').rstrip('/')
+
 
 # Database environment variables (for cloud deployment)
 # Add these to your .env file or environment variables:
@@ -105,8 +113,42 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
 # Dynamic database configuration using environment variables
+DATABASE_URL = config('DATABASE_URL', default='')
+
+def parse_database_url(url):
+    parsed = urlparse(url)
+    scheme = parsed.scheme
+    engine_map = {
+        'postgres': 'django.db.backends.postgresql',
+        'postgresql': 'django.db.backends.postgresql',
+        'pgsql': 'django.db.backends.postgresql',
+        'mysql': 'django.db.backends.mysql',
+        'sqlite': 'django.db.backends.sqlite3',
+    }
+    engine = engine_map.get(scheme, None)
+
+    if engine == 'django.db.backends.sqlite3':
+        name = parsed.path[1:] if parsed.path else str(BASE_DIR / 'db.sqlite3')
+        return {
+            'ENGINE': engine,
+            'NAME': name or str(BASE_DIR / 'db.sqlite3'),
+        }
+
+    if engine:
+        return {
+            'ENGINE': engine,
+            'NAME': parsed.path[1:],
+            'USER': parsed.username or config('DATABASE_USER', default=''),
+            'PASSWORD': parsed.password or config('DATABASE_PASSWORD', default=''),
+            'HOST': parsed.hostname or config('DATABASE_HOST', default=''),
+            'PORT': str(parsed.port or config('DATABASE_PORT', default='')),
+            'OPTIONS': {'sslmode': 'require'} if engine == 'django.db.backends.postgresql' else {},
+        }
+
+    return None
+
 DATABASES = {
-    'default': {
+    'default': parse_database_url(DATABASE_URL) or {
         'ENGINE': config('DATABASE_ENGINE', default='django.db.backends.sqlite3'),
         'NAME': config('DATABASE_NAME', default=str(BASE_DIR / 'db.sqlite3')),
         'USER': config('DATABASE_USER', default=''),

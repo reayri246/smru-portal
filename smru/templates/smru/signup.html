@@ -302,36 +302,37 @@ document.getElementById('id_college').addEventListener('change', function() {
 async function updateCollegeList() {
     const collegeType = document.getElementById('id_college_type').value;
     const collegeSelect = document.getElementById('id_college');
-    
+    const apiUrl = "{% url 'smru:get_colleges_by_type' %}";
+
     if (!collegeType) {
         collegeSelect.innerHTML = '<option value="">Select College Type First</option>';
+        collegeSelect.disabled = true;
         return;
     }
-    
-    // If colleges are already loaded for this type, don't reload
-    const currentOptions = collegeSelect.querySelectorAll('option');
-    if (currentOptions.length > 1 && collegeType === '{{ selected_college_type|default:"" }}') {
-        return;
-    }
-    
+
+    collegeSelect.disabled = false;
+    collegeSelect.innerHTML = '<option value="">Loading colleges...</option>';
+
     try {
-        // Show loading state
-        collegeSelect.innerHTML = '<option value="">Loading colleges...</option>';
-        
-        // Fetch colleges from API
-        const response = await fetch(`/smru/api/colleges-by-type/?type=${collegeType}`);
+        const response = await fetch(`${apiUrl}?type=${encodeURIComponent(collegeType)}`);
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}`);
+        }
+
         const data = await response.json();
-        
-        // Clear and populate college dropdown
         collegeSelect.innerHTML = '<option value="">Select a College</option>';
-        
+
+        if (!Array.isArray(data.colleges) || data.colleges.length === 0) {
+            collegeSelect.innerHTML = '<option value="">No colleges found for this type</option>';
+            return;
+        }
+
         data.colleges.forEach(college => {
             const option = document.createElement('option');
             option.value = college.id;
             option.textContent = college.name;
             collegeSelect.appendChild(option);
         });
-        
     } catch (error) {
         console.error('Error loading colleges:', error);
         collegeSelect.innerHTML = '<option value="">Error loading colleges</option>';

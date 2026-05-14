@@ -133,16 +133,6 @@ class SignUpForm(UserCreationForm):
         })
     )
     
-    hall_ticket_number = forms.CharField(
-        max_length=50,
-        required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Hall Ticket Number',
-            'id': 'id_hall_ticket'
-        })
-    )
-    
     roll_number = forms.CharField(
         max_length=50,
         required=False,
@@ -276,7 +266,7 @@ class SignUpForm(UserCreationForm):
                 'college': 'College Name',
                 'branch': 'Branch',
                 'year': 'Year',
-                'hall_ticket_number': 'Hall Ticket Number',
+                'roll_number': 'Roll Number',
                 'phone': 'Phone Number',
                 'live_photo': 'Live Selfie',
             }

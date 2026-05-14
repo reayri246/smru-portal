@@ -6,6 +6,11 @@ from django.contrib.admin.sites import AdminSite
 import django.contrib.admin.sites as admin_sites
 from django.contrib.auth.admin import UserAdmin, GroupAdmin
 from django.contrib.auth.models import Group, User
+from django.core.cache import cache
+import logging
+
+logger = logging.getLogger('smru')
+
 from .models import (
     College, Branch, Year, Subject, Notification, Event, Complaint, StudentProfile,
     UserRole, ComplaintCategory, ComplaintPerson, LoginRequest, LoginActivity, 
@@ -385,7 +390,6 @@ class LoginRequestAdmin(admin.ModelAdmin):
                 <tr><td><strong>Full Name:</strong></td><td>{obj.user.get_full_name()}</td></tr>
                 <tr><td><strong>Email:</strong></td><td>{obj.user.email}</td></tr>
                 <tr><td><strong>Roll Number:</strong></td><td>{profile.roll_number}</td></tr>
-                <tr><td><strong>Hall Ticket:</strong></td><td>{profile.hall_ticket_number}</td></tr>
                 <tr><td><strong>Phone:</strong></td><td>{profile.phone}</td></tr>
                 <tr><td><strong>College:</strong></td><td>{profile.college_name}</td></tr>
                 <tr><td><strong>Branch:</strong></td><td>{profile.branch_name}</td></tr>
@@ -454,10 +458,37 @@ class UserAccountLockAdmin(admin.ModelAdmin):
     list_filter = ['is_locked', 'locked_at', 'last_login_date']
     search_fields = ['user__username', 'lock_reason']
     readonly_fields = ['locked_at']
+    actions = ['unlock_accounts']
     
     def unlock_accounts(self, request, queryset):
-        count = queryset.update(is_locked=False, lock_reason='', unlock_at=None)
-        self.message_user(request, f'{count} accounts unlocked.')
+        count = 0
+        for account_lock in queryset.select_related('user'):
+            # Update DB record
+            account_lock.is_locked = False
+            account_lock.lock_reason = ''
+            account_lock.locked_at = None
+            account_lock.unlock_at = None
+            account_lock.daily_login_count = 0
+            account_lock.last_login_date = None
+            account_lock.save()
+            
+            # Clear all possible rate-limit cache keys for this user
+            username = account_lock.user.username.strip().lower()
+            email = account_lock.user.email.strip().lower()
+            
+            cache_keys_to_clear = [
+                f'login_attempts_user:{username}',
+                f'login_attempts_input:{username}',
+                f'login_attempts_input:{email}',
+            ]
+            for cache_key in cache_keys_to_clear:
+                cache.delete(cache_key)
+                logger.info(f"Cleared cache key: {cache_key}")
+            
+            count += 1
+            logger.info(f"Unlocked account: {account_lock.user.username}")
+        
+        self.message_user(request, f'{count} accounts unlocked and cache cleared.')
     unlock_accounts.short_description = 'Unlock selected accounts'
 
 
@@ -476,7 +507,7 @@ class StudentProfileAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at', 'id_proofs_display']
     fieldsets = (
         ('Personal Information', {
-            'fields': ('user', 'roll_number', 'hall_ticket_number', 'phone', 'bio')
+            'fields': ('user', 'roll_number', 'phone', 'bio')
         }),
         ('College Details', {
             'fields': ('college', 'college_name', 'branch', 'branch_name', 'year', 'year_name', 'is_from_listed_college')
@@ -544,13 +575,29 @@ class StudentProfileAdmin(admin.ModelAdmin):
     id_proofs_display.short_description = 'ID Proofs Review'
     
     def approve_students(self, request, queryset):
-        count = queryset.update(is_approved=True)
-        self.message_user(request, f'{count} student(s) approved.')
+        count = 0
+        for profile in queryset:
+            profile.is_approved = True
+            profile.save()
+            login_request, created = LoginRequest.objects.get_or_create(user=profile.user)
+            login_request.status = 'approved'
+            login_request.approved_at = timezone.now()
+            login_request.approved_by = request.user
+            login_request.save()
+            count += 1
+        self.message_user(request, f'{count} student(s) approved and login requests synced.')
     approve_students.short_description = 'Approve selected students'
-    
+
     def reject_students(self, request, queryset):
-        count = queryset.update(is_approved=False)
-        self.message_user(request, f'{count} student(s) rejected.')
+        count = 0
+        for profile in queryset:
+            profile.is_approved = False
+            profile.save()
+            login_request, created = LoginRequest.objects.get_or_create(user=profile.user)
+            login_request.status = 'rejected'
+            login_request.save()
+            count += 1
+        self.message_user(request, f'{count} student(s) rejected and login requests synced.')
     reject_students.short_description = 'Reject selected students'
 
 
