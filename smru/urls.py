@@ -28,6 +28,7 @@ urlpatterns = [
     
     # AJAX endpoints
     path('api/colleges-by-type/', views.get_colleges_by_type, name='get_colleges_by_type'),
+    path('api/persons-by-category/', views.get_persons_by_category, name='get_persons_by_category'),
     path('manage-complaints/', views.manage_complaints, name='manage_complaints'),
     path('complaints/', views.complaints, name='complaints'),
     path('my-complaints/', views.my_complaints, name='my_complaints'),

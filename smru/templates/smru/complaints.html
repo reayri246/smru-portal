@@ -2,6 +2,37 @@
 
 {% block title %}Submit Complaint - SMRU College Portal{% endblock %}
 
+{% block extra_head %}
+<style>
+    /* Styling for read-only user information fields */
+    .form-control[readonly] {
+        background-color: #f8f9fa !important;
+        border-color: #dee2e6 !important;
+        color: #6c757d !important;
+        cursor: not-allowed !important;
+    }
+    
+    .form-control[readonly]:focus {
+        box-shadow: none !important;
+        border-color: #dee2e6 !important;
+    }
+    
+    /* Add some visual distinction for user info section */
+    .user-info-section {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid #dee2e6;
+    }
+    
+    .user-info-section .form-label {
+        font-weight: 600;
+        color: #495057;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container py-5">
     <div class="row justify-content-center">
@@ -17,29 +48,38 @@
                     <form method="post" enctype="multipart/form-data" novalidate>
                         {% csrf_token %}
                         
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="id_name" class="form-label">Full Name <span class="text-danger">*</span></label>
-                                {{ form.name }}
+                        <!-- User Information Section -->
+                        <div class="user-info-section">
+                            <h5 class="mb-3"><i class="fas fa-user-circle"></i> Your Information</h5>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="id_name" class="form-label">Full Name</label>
+                                    {{ form.name }}
+                                    <small class="form-text text-muted">Your registered full name</small>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="id_roll" class="form-label">Roll Number</label>
+                                    {{ form.roll }}
+                                    <small class="form-text text-muted">Your student roll number</small>
+                                </div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="id_roll" class="form-label">Roll Number <span class="text-danger">*</span></label>
-                                {{ form.roll }}
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="id_email" class="form-label">Email Address</label>
+                                    {{ form.email }}
+                                    <small class="form-text text-muted">Your registered email address</small>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="id_phone" class="form-label">Phone Number</label>
+                                    {{ form.phone }}
+                                    <small class="form-text text-muted">Your registered phone number</small>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="id_email" class="form-label">Email Address <span class="text-danger">*</span></label>
-                                {{ form.email }}
-                                <small class="form-text text-muted">We'll contact you on this email for updates.</small>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="id_phone" class="form-label">Phone Number</label>
-                                {{ form.phone }}
-                            </div>
-                        </div>
-
+                        <!-- Complaint Details Section -->
                         <div class="mb-3">
                             <label for="id_category" class="form-label">Category <span class="text-danger">*</span></label>
                             {{ form.category }}
@@ -108,4 +148,52 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const categorySelect = document.getElementById('id_category');
+        const personSelect = document.getElementById('id_person');
+        
+        // Initialize person dropdown to empty if no category is selected on page load
+        if (!categorySelect.value) {
+            personSelect.innerHTML = '<option value="">---------</option>';
+        }
+        
+        // Listen for category change
+        categorySelect.addEventListener('change', function() {
+            const categoryId = this.value;
+            
+            if (!categoryId) {
+                // Clear person dropdown if no category selected
+                personSelect.innerHTML = '<option value="">---------</option>';
+                return;
+            }
+            
+            // Fetch persons for selected category
+            fetch(`{% url 'smru:get_persons_by_category' %}?category_id=${categoryId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Error:', data.error);
+                        personSelect.innerHTML = '<option value="">Error loading persons</option>';
+                        return;
+                    }
+                    
+                    // Clear and rebuild person dropdown
+                    personSelect.innerHTML = '<option value="">---------</option>';
+                    
+                    data.persons.forEach(person => {
+                        const option = document.createElement('option');
+                        option.value = person.id;
+                        option.textContent = `${person.name} (${person.designation})`;
+                        personSelect.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching persons:', error);
+                    personSelect.innerHTML = '<option value="">Error loading persons</option>';
+                });
+        });
+    });
+</script>
 {% endblock %}

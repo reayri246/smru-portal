@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
+from django.db.models import Q
 from .models import Complaint, StudentProfile, UserRole, ComplaintCategory, ComplaintPerson, College
 
 
@@ -378,6 +379,46 @@ class ResetPasswordForm(forms.Form):
 
 
 class ComplaintForm(forms.ModelForm):
+    # Additional fields for user information
+    name = forms.CharField(
+        max_length=100,
+        required=True,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'readonly': 'readonly'
+        }),
+        label='Full Name'
+    )
+    
+    roll = forms.CharField(
+        max_length=50,
+        required=True,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'readonly': 'readonly'
+        }),
+        label='Roll Number'
+    )
+    
+    email = forms.EmailField(
+        required=True,
+        widget=forms.EmailInput(attrs={
+            'class': 'form-control',
+            'readonly': 'readonly'
+        }),
+        label='Email Address'
+    )
+    
+    phone = forms.CharField(
+        max_length=15,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'readonly': 'readonly'
+        }),
+        label='Phone Number'
+    )
+    
     class Meta:
         model = Complaint
         fields = ['category', 'person', 'complaint_text', 'file', 'feedback']
@@ -408,13 +449,36 @@ class ComplaintForm(forms.ModelForm):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
 
+        # Pre-populate user information fields
+        if self.user:
+            self.fields['name'].initial = self.user.get_full_name() or self.user.username
+            self.fields['email'].initial = self.user.email
+            
+            # Get student profile data if available
+            if hasattr(self.user, 'student_profile') and self.user.student_profile:
+                profile = self.user.student_profile
+                self.fields['roll'].initial = profile.roll_number
+                self.fields['phone'].initial = profile.phone
+
         if self.user and hasattr(self.user, 'student_profile') and self.user.student_profile:
             if self.user.student_profile.is_from_listed_college:
-                self.fields['category'].queryset = ComplaintCategory.objects.filter(type='listed_college', is_active=True)
+                # Include both 'listed_college' and 'both' categories for listed college students
+                self.fields['category'].queryset = ComplaintCategory.objects.filter(
+                    Q(type='listed_college') | Q(type='both'), 
+                    is_active=True
+                )
             else:
-                self.fields['category'].queryset = ComplaintCategory.objects.filter(type='other_college', is_active=True)
+                # Include both 'other_college' and 'both' categories for non-listed college students
+                self.fields['category'].queryset = ComplaintCategory.objects.filter(
+                    Q(type='other_college') | Q(type='both'), 
+                    is_active=True
+                )
         else:
-            self.fields['category'].queryset = ComplaintCategory.objects.filter(type='other_college', is_active=True)
+            # Default to non-listed college categories plus 'both'
+            self.fields['category'].queryset = ComplaintCategory.objects.filter(
+                Q(type='other_college') | Q(type='both'), 
+                is_active=True
+            )
 
         category_id = None
         if self.data.get('category'):
@@ -427,7 +491,8 @@ class ComplaintForm(forms.ModelForm):
         if category_id:
             self.fields['person'].queryset = ComplaintPerson.objects.filter(category_id=category_id, is_active=True)
         else:
-            self.fields['person'].queryset = ComplaintPerson.objects.filter(is_active=True)
+            # Show no persons until a category is selected
+            self.fields['person'].queryset = ComplaintPerson.objects.none()
 
 
 class StudentProfileForm(forms.ModelForm):

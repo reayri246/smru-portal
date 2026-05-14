@@ -1147,6 +1147,25 @@ def get_colleges_by_type(request):
         logger.error(f"Error fetching colleges by type: {str(e)}")
         return JsonResponse({'error': 'Failed to load colleges'}, status=500)
 
+
+def get_persons_by_category(request):
+    """AJAX endpoint to get complaint persons filtered by category"""
+    category_id = request.GET.get('category_id', '')
+    
+    if not category_id:
+        return JsonResponse({'error': 'Category ID is required'}, status=400)
+    
+    try:
+        persons = ComplaintPerson.objects.filter(
+            category_id=category_id,
+            is_active=True
+        ).values('id', 'name', 'designation', 'email')
+        persons_data = list(persons)
+        return JsonResponse({'persons': persons_data})
+    except Exception as e:
+        logger.error(f"Error fetching persons by category: {str(e)}")
+        return JsonResponse({'error': 'Failed to load persons'}, status=500)
+
 def error_404(request, exception):
     """404 error handler"""
     return render(request, 'smru/404.html', status=404)
