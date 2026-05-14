@@ -23,26 +23,31 @@ class SecureAdminSite(AdminSite):
     site_header = "SMRU PORTAL ADMINISTRATOR"
     site_title = "SMRU Admin Portal"
     index_title = "Welcome to SMRU Admin Portal"
-    
+    STAFF_ROLES = [
+        'admin',
+        'hod',
+        'chairman',
+        'principal',
+        'director',
+        'faculty',
+        'security',
+        'anti_ragging_team',
+        'she_team',
+    ]
+
     def has_permission(self, request):
         """Override to add custom permission checks"""
-        # Check if user is authenticated
         if not request.user.is_authenticated:
             return False
-        
-        # Allow superusers
+
         if request.user.is_superuser:
             return True
-            
-        # Check if user has admin role
+
         try:
             user_role = request.user.user_role
-            if user_role.role == 'admin' and user_role.is_active:
-                return True
+            return user_role.is_active and user_role.role in self.STAFF_ROLES
         except UserRole.DoesNotExist:
-            pass
-            
-        return False
+            return False
 
 
 # Create secure admin site
