@@ -65,6 +65,18 @@
                         </div>
                         {% endif %}
 
+                        {% if syllabus_years %}
+                        <div class="mb-3">
+                            <label for="syllabus_year" class="form-label">Syllabus Year</label>
+                            <select name="syllabus_year" id="syllabus_year" class="form-select" onchange="document.getElementById('filterForm').submit();">
+                                <option value="">Choose Syllabus Year...</option>
+                                {% for sy in syllabus_years %}
+                                <option value="{{ sy }}" {% if sy == selected_syllabus_year %}selected{% endif %}>{{ sy }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
                         <a href="{% url 'smru:notes' %}" class="btn btn-outline-secondary w-100">Reset</a>
                     </form>
                 </div>
@@ -83,6 +95,9 @@
                             <p class="text-muted"><small>Code: {{ subject.code }}</small></p>
                             {% endif %}
                             <p class="text-muted"><small>{{ subject.year }}</small></p>
+                            {% if subject.syllabus_year %}
+                            <p class="text-muted"><small>Syllabus: {{ subject.syllabus_year }}</small></p>
+                            {% endif %}
 
                             {% if subject.drive_link %}
                             <a href="{{ subject.drive_link }}" class="btn btn-sm btn-primary" target="_blank">

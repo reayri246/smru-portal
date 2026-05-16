@@ -86,6 +86,11 @@ class Year(models.Model):
 
 class Subject(models.Model):
     year = models.ForeignKey(Year, on_delete=models.CASCADE, related_name='subjects')
+    syllabus_year = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text='Set the syllabus year for this subject notes, e.g. 2023-24.'
+    )
     name = models.CharField(max_length=200)
     code = models.CharField(max_length=50, blank=True)
     drive_folder_id = models.CharField(max_length=100)  # Google Drive Folder ID
@@ -93,7 +98,7 @@ class Subject(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['year', 'name']
+        unique_together = ['year', 'name', 'syllabus_year']
         ordering = ['year', 'name']
         verbose_name_plural = 'Subjects'
 
@@ -136,12 +141,20 @@ class Notification(models.Model):
         ('medium', 'Medium'),
         ('high', 'High'),
     )
+    TARGET_CHOICES = (
+        ('listed_colleges', 'Listed Colleges'),
+        ('non_listed_colleges', 'Non Listed Colleges'),
+        ('both_colleges', 'Listed and Non Listed Colleges'),
+        ('specific_college', 'Specific College'),
+    )
     
     title = models.CharField(max_length=200)
     description = models.TextField()
     link = models.URLField(blank=True, null=True)  # optional registration link
     image = models.ImageField(upload_to='notifications/', blank=True, null=True)
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
+    target = models.CharField(max_length=30, choices=TARGET_CHOICES, default='listed_colleges')
+    college = models.ForeignKey('College', on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications')
     is_active = models.BooleanField(default=True)
     is_public = models.BooleanField(default=True)
     recipient_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications')
@@ -177,6 +190,12 @@ class Event(models.Model):
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
     )
+    TARGET_CHOICES = (
+        ('listed_colleges', 'Listed Colleges'),
+        ('non_listed_colleges', 'Non Listed Colleges'),
+        ('both_colleges', 'Listed and Non Listed Colleges'),
+        ('specific_college', 'Specific College'),
+    )
     
     name = models.CharField(max_length=200)
     description = models.TextField()
@@ -185,6 +204,8 @@ class Event(models.Model):
     location = models.CharField(max_length=200)
     image = models.ImageField(upload_to='events/', blank=True, null=True)
     registration_link = models.URLField(blank=True, null=True)
+    target = models.CharField(max_length=30, choices=TARGET_CHOICES, default='listed_colleges')
+    college = models.ForeignKey('College', on_delete=models.SET_NULL, null=True, blank=True, related_name='events')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='upcoming')
     capacity = models.IntegerField(blank=True, null=True)  # max participants
     registered_count = models.IntegerField(default=0)

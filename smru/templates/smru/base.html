@@ -642,12 +642,12 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:home' %}">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'smru:about' %}">About Us</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:notifications' %}">Notifications</a></li>
                     {% if user.user_role and user.user_role.role in 'hod,chairman,principal,director,faculty,security,admin' %}
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:staff_notifications' %}">Assigned Notifications</a></li>
                     {% endif %}
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:events' %}">Events</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% url 'smru:notes' %}">Study Notes</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:engineering' %}">Engineering Notes</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:medical' %}">Medical Notes</a></li>
                     

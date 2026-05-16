@@ -16,7 +16,7 @@
                     <form method="get" id="filterForm">
                         <div class="mb-3">
                             <label for="college" class="form-label">College</label>
-                            <select name="college" id="college" class="form-select" onchange="document.getElementById('filterForm').submit();">
+                            <select name="college" id="college" class="form-select">
                                 <option value="">Choose College...</option>
                                 {% for college in colleges %}
                                 <option value="{{ college.id }}" {% if college.id|stringformat:"s" == selected_college %}selected{% endif %}>
@@ -26,36 +26,157 @@
                             </select>
                         </div>
 
-                        {% if branches %}
                         <div class="mb-3">
                             <label for="branch" class="form-label">Branch</label>
-                            <select name="branch" id="branch" class="form-select" onchange="document.getElementById('filterForm').submit();">
-                                <option value="">Choose Branch...</option>
-                                {% for branch in branches %}
-                                <option value="{{ branch.id }}" {% if branch.id|stringformat:"s" == selected_branch %}selected{% endif %}>
-                                    {{ branch.name }}
-                                </option>
-                                {% endfor %}
+                            <select name="branch" id="branch" class="form-select" disabled>
+                                <option value="">Choose College First...</option>
                             </select>
                         </div>
-                        {% endif %}
 
-                        {% if years %}
                         <div class="mb-3">
                             <label for="year" class="form-label">Year</label>
-                            <select name="year" id="year" class="form-select" onchange="document.getElementById('filterForm').submit();">
-                                <option value="">Choose Year...</option>
-                                {% for year in years %}
-                                <option value="{{ year.id }}" {% if year.id|stringformat:"s" == selected_year %}selected{% endif %}>
-                                    {{ year.get_name_display }}
-                                </option>
+                            <select name="year" id="year" class="form-select" disabled>
+                                <option value="">Choose Branch First...</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="syllabus_year" class="form-label">Syllabus Year</label>
+                            <select name="syllabus_year" id="syllabus_year" class="form-select">
+                                <option value="">Choose Syllabus Year...</option>
+                                {% for sy in syllabus_years %}
+                                <option value="{{ sy }}" {% if sy == selected_syllabus_year %}selected{% endif %}>{{ sy }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        {% endif %}
 
+                        <button type="submit" class="btn btn-primary w-100 mb-2">Search Notes</button>
                         <a href="{% url 'smru:engineering' %}" class="btn btn-outline-secondary w-100">Reset</a>
                     </form>
+                    {{ branch_data|json_script:"branches-data" }}
+                    {{ year_data|json_script:"years-data" }}
+                    {{ syllabus_years_map|json_script:"syllabus-years-data" }}
+                    <script>
+                        const branchesData = JSON.parse(document.getElementById('branches-data').textContent || '[]');
+                        const yearsData = JSON.parse(document.getElementById('years-data').textContent || '[]');
+                        const syllabusYearsMap = JSON.parse(document.getElementById('syllabus-years-data').textContent || '{}');
+                        const collegeSelect = document.getElementById('college');
+                        const branchSelect = document.getElementById('branch');
+                        const yearSelect = document.getElementById('year');
+                        const syllabusSelect = document.getElementById('syllabus_year');
+                        const selectedBranch = '{{ selected_branch|default:"" }}';
+                        const selectedYear = '{{ selected_year|default:"" }}';
+                        const selectedSyllabus = '{{ selected_syllabus_year|default:"" }}';
+
+                        function clearOptions(select, placeholder) {
+                            select.innerHTML = '';
+                            const option = document.createElement('option');
+                            option.value = '';
+                            option.textContent = placeholder;
+                            select.appendChild(option);
+                        }
+
+                        function populateBranches(collegeId) {
+                            clearOptions(branchSelect, 'Choose Branch...');
+                            clearOptions(yearSelect, 'Choose Branch First...');
+                            yearSelect.disabled = true;
+
+                            if (!collegeId) {
+                                branchSelect.disabled = true;
+                                return;
+                            }
+
+                            const filtered = branchesData.filter(item => String(item.college_id) === String(collegeId));
+                            if (filtered.length === 0) {
+                                const option = document.createElement('option');
+                                option.value = '';
+                                option.textContent = 'No branches available';
+                                branchSelect.appendChild(option);
+                                branchSelect.disabled = true;
+                                return;
+                            }
+
+                            filtered.forEach(item => {
+                                const option = document.createElement('option');
+                                option.value = item.id;
+                                option.textContent = item.name;
+                                if (String(item.id) === selectedBranch) {
+                                    option.selected = true;
+                                }
+                                branchSelect.appendChild(option);
+                            });
+                            branchSelect.disabled = false;
+                            if (selectedBranch) {
+                                populateYears(selectedBranch);
+                            }
+                        }
+
+                        function populateYears(branchId) {
+                            clearOptions(yearSelect, 'Choose Year...');
+                            if (!branchId) {
+                                yearSelect.disabled = true;
+                                return;
+                            }
+
+                            const filtered = yearsData.filter(item => String(item.branch_id) === String(branchId));
+                            if (filtered.length === 0) {
+                                const option = document.createElement('option');
+                                option.value = '';
+                                option.textContent = 'No years available';
+                                yearSelect.appendChild(option);
+                                yearSelect.disabled = true;
+                                return;
+                            }
+
+                            filtered.forEach(item => {
+                                const option = document.createElement('option');
+                                option.value = item.id;
+                                option.textContent = item.name;
+                                if (String(item.id) === selectedYear) {
+                                    option.selected = true;
+                                }
+                                yearSelect.appendChild(option);
+                            });
+                            yearSelect.disabled = false;
+                            // populate syllabus years for selected year if present
+                            if (selectedYear) {
+                                populateSyllabusYears(selectedYear);
+                            }
+                        }
+
+                        function populateSyllabusYears(yearId) {
+                            if (!syllabusSelect) return;
+                            syllabusSelect.innerHTML = '';
+                            const placeholder = document.createElement('option');
+                            placeholder.value = '';
+                            placeholder.textContent = 'Choose Syllabus Year...';
+                            syllabusSelect.appendChild(placeholder);
+                            const list = syllabusYearsMap[String(yearId)] || [];
+                            if (list.length === 0) {
+                                return;
+                            }
+                            list.forEach(sy => {
+                                const option = document.createElement('option');
+                                option.value = sy;
+                                option.textContent = sy;
+                                if (String(sy) === String(selectedSyllabus)) option.selected = true;
+                                syllabusSelect.appendChild(option);
+                            });
+                        }
+
+                        collegeSelect.addEventListener('change', () => {
+                            populateBranches(collegeSelect.value);
+                        });
+                        branchSelect.addEventListener('change', () => {
+                            populateYears(branchSelect.value);
+                        });
+
+                        yearSelect.addEventListener('change', () => {
+                            populateSyllabusYears(yearSelect.value);
+                        });
+
+                        populateBranches('{{ selected_college|default:"" }}');
+                    </script>
                 </div>
             </div>
         </div>
@@ -72,6 +193,9 @@
                             <p class="text-muted"><small>Code: {{ subject.code }}</small></p>
                             {% endif %}
                             <p class="text-muted"><small>{{ subject.year }}</small></p>
+                            {% if subject.syllabus_year %}
+                            <p class="text-muted"><small>Syllabus: {{ subject.syllabus_year }}</small></p>
+                            {% endif %}
                             
                             {% if subject.drive_link %}
                             <a href="{{ subject.drive_link }}" class="btn btn-sm btn-primary" target="_blank">

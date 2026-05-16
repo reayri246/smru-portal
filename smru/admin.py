@@ -18,6 +18,22 @@ from .models import (
 )
 
 
+class YearSelect(forms.Select):
+    def __init__(self, attrs=None, year_college_map=None):
+        self.year_college_map = year_college_map or {}
+        super().__init__(attrs)
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        if value is not None:
+            value_str = str(value)
+            if value_str.isdigit():
+                college_id = self.year_college_map.get(int(value_str))
+                if college_id is not None:
+                    option['attrs']['data-college-id'] = str(college_id)
+        return option
+
+
 class SecureAdminSite(AdminSite):
     """Custom admin site with enhanced security"""
     site_header = "SMRU PORTAL ADMINISTRATOR"
@@ -102,17 +118,29 @@ class SubjectAdminForm(forms.ModelForm):
 
     class Meta:
         model = Subject
-        fields = ['college', 'name', 'code', 'year', 'drive_folder_id', 'drive_link']
+        fields = ['college', 'name', 'code', 'year', 'syllabus_year', 'drive_folder_id', 'drive_link']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.pk and self.instance.year:
             self.fields['college'].initial = self.instance.year.branch.college
+
+        year_college_map = {year.pk: year.branch.college_id for year in Year.objects.all()}
+        self.fields['year'].widget = YearSelect(year_college_map=year_college_map)
+
         selected_college = self.data.get('college') or self.initial.get('college')
+        selected_year = self.data.get('year') or self.initial.get('year')
         if selected_college:
             try:
                 college = College.objects.get(pk=selected_college)
-                self.fields['year'].queryset = Year.objects.filter(branch__college=college)
+                queryset = Year.objects.filter(branch__college=college)
+                if selected_year:
+                    try:
+                        selected_year_obj = Year.objects.get(pk=selected_year)
+                        queryset = queryset | Year.objects.filter(pk=selected_year_obj.pk)
+                    except (Year.DoesNotExist, ValueError, TypeError):
+                        pass
+                self.fields['year'].queryset = queryset.distinct()
             except (College.DoesNotExist, ValueError, TypeError):
                 self.fields['year'].queryset = Year.objects.none()
         else:
@@ -130,19 +158,22 @@ class SubjectAdminForm(forms.ModelForm):
 @admin.register(Subject)
 class SubjectAdmin(admin.ModelAdmin):
     form = SubjectAdminForm
-    list_display = ['name', 'code', 'year', 'has_drive_link']
-    list_filter = ['year', 'created_at']
-    search_fields = ['name', 'code']
+    list_display = ['name', 'code', 'year', 'syllabus_year', 'has_drive_link']
+    list_filter = ['year', 'syllabus_year', 'created_at']
+    search_fields = ['name', 'code', 'syllabus_year']
     readonly_fields = ['created_at']
     fieldsets = (
         (None, {
-            'fields': ('college', 'name', 'code', 'year', 'drive_folder_id', 'drive_link')
+            'fields': ('college', 'name', 'code', 'year', 'syllabus_year', 'drive_folder_id', 'drive_link')
         }),
         ('Timestamps', {
             'fields': ('created_at',),
             'classes': ('collapse',)
         }),
     )
+
+    class Media:
+        js = ('smru/js/admin_subject_year_filter.js',)
 
     def has_drive_link(self, obj):
         if obj.drive_link:
@@ -153,8 +184,8 @@ class SubjectAdmin(admin.ModelAdmin):
 
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
-    list_display = ['title', 'priority', 'is_active', 'is_public', 'recipient_user', 'recipient_email', 'status_badge', 'created_at']
-    list_filter = ['is_active', 'is_public', 'priority', 'created_at']
+    list_display = ['title', 'priority', 'target', 'college', 'is_active', 'is_public', 'recipient_user', 'recipient_email', 'status_badge', 'created_at']
+    list_filter = ['is_active', 'is_public', 'priority', 'target', 'college', 'created_at']
     search_fields = ['title', 'description', 'recipient_email', 'recipient_user__username']
     readonly_fields = ['created_at', 'updated_at']
     fieldsets = (
@@ -162,7 +193,7 @@ class NotificationAdmin(admin.ModelAdmin):
             'fields': ('title', 'description', 'image')
         }),
         ('Settings', {
-            'fields': ('link', 'priority', 'is_active', 'is_public', 'recipient_user', 'recipient_email', 'expires_at')
+            'fields': ('link', 'priority', 'is_active', 'is_public', 'recipient_user', 'recipient_email', 'target', 'college', 'expires_at')
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
@@ -187,7 +218,7 @@ class NotificationAdmin(admin.ModelAdmin):
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     list_display = ['name', 'date', 'status', 'location', 'registered_count']
-    list_filter = ['status', 'date']
+    list_filter = ['status', 'date', 'target', 'college']
     search_fields = ['name', 'location', 'description']
     readonly_fields = ['created_at', 'updated_at', 'registered_count']
     fieldsets = (
@@ -199,6 +230,9 @@ class EventAdmin(admin.ModelAdmin):
         }),
         ('Location & Registration', {
             'fields': ('location', 'registration_link', 'capacity', 'registered_count')
+        }),
+        ('Targeting', {
+            'fields': ('target', 'college')
         }),
         ('Status', {
             'fields': ('status',)

@@ -723,10 +723,12 @@ def notes(request):
         college_id = request.GET.get('college')
         branch_id = request.GET.get('branch')
         year_id = request.GET.get('year')
+        syllabus_year = request.GET.get('syllabus_year')
         
         branches = []
         years = []
         subjects = []
+        syllabus_years = []
         
         if college_id:
             try:
@@ -739,7 +741,10 @@ def notes(request):
                     
                     if year_id:
                         year = years.get(id=year_id)
+                        syllabus_years = list(year.subjects.order_by('syllabus_year').values_list('syllabus_year', flat=True).distinct())
                         subjects = year.subjects.all()
+                        if syllabus_year:
+                            subjects = subjects.filter(syllabus_year=syllabus_year)
             except (College.DoesNotExist, Branch.DoesNotExist, Year.DoesNotExist):
                 messages.error(request, 'Invalid selection.')
         
@@ -749,10 +754,12 @@ def notes(request):
             'branches': branches,
             'years': years,
             'subjects': subjects,
+            'syllabus_years': [y for y in syllabus_years if y],
             'selected_type': college_type,
             'selected_college': college_id,
             'selected_branch': branch_id,
             'selected_year': year_id,
+            'selected_syllabus_year': syllabus_year,
         })
     except Exception as e:
         logger.error(f"Error in notes view: {str(e)}")
@@ -765,10 +772,12 @@ def engineering_notes(request):
         college_id = request.GET.get('college')
         branch_id = request.GET.get('branch')
         year_id = request.GET.get('year')
+        syllabus_year = request.GET.get('syllabus_year')
         
         branches = []
         years = []
         subjects = []
+        syllabus_years = []
         
         if college_id:
             try:
@@ -781,56 +790,34 @@ def engineering_notes(request):
                     
                     if year_id:
                         year = years.get(id=year_id)
+                        syllabus_years = list(year.subjects.order_by('syllabus_year').values_list('syllabus_year', flat=True).distinct())
                         subjects = year.subjects.all()
+                        if syllabus_year:
+                            subjects = subjects.filter(syllabus_year=syllabus_year)
             except (College.DoesNotExist, Branch.DoesNotExist, Year.DoesNotExist):
                 messages.error(request, 'Invalid selection.')
+
+        branch_data = list(Branch.objects.filter(college__type='engineering').values('id', 'name', 'college_id'))
+        year_data = list(Year.objects.filter(branch__college__type='engineering').values('id', 'name', 'branch_id'))
+        # build a map of year_id -> syllabus years for client-side population
+        syllabus_map = {}
+        for y in Year.objects.filter(branch__college__type='engineering'):
+            sy = list(y.subjects.order_by('syllabus_year').values_list('syllabus_year', flat=True).distinct())
+            syllabus_map[y.pk] = [s for s in sy if s]
         
         return render(request, 'smru/engineering.html', {
             'colleges': colleges_list,
             'branches': branches,
             'years': years,
             'subjects': subjects,
+            'syllabus_years': [y for y in syllabus_years if y],
             'selected_college': college_id,
             'selected_branch': branch_id,
             'selected_year': year_id,
-        })
-    except Exception as e:
-        logger.error(f"Error in engineering_notes view: {str(e)}")
-        return render(request, 'smru/engineering.html', {'error': 'Error loading materials'})
-    """Engineering notes - Branch and subject selection"""
-    try:
-        colleges_list = College.objects.filter(type='engineering')
-        college_id = request.GET.get('college')
-        branch_id = request.GET.get('branch')
-        year_id = request.GET.get('year')
-        
-        branches = []
-        years = []
-        subjects = []
-        
-        if college_id:
-            try:
-                college = College.objects.get(id=college_id, type='engineering')
-                branches = college.branches.all()
-                
-                if branch_id:
-                    branch = branches.get(id=branch_id)
-                    years = branch.years.all()
-                    
-                    if year_id:
-                        year = years.get(id=year_id)
-                        subjects = year.subjects.all()
-            except (College.DoesNotExist, Branch.DoesNotExist, Year.DoesNotExist):
-                messages.error(request, 'Invalid selection.')
-        
-        return render(request, 'smru/engineering.html', {
-            'colleges': colleges_list,
-            'branches': branches,
-            'years': years,
-            'subjects': subjects,
-            'selected_college': college_id,
-            'selected_branch': branch_id,
-            'selected_year': year_id,
+            'selected_syllabus_year': syllabus_year,
+            'branch_data': branch_data,
+            'year_data': year_data,
+            'syllabus_years_map': syllabus_map,
         })
     except Exception as e:
         logger.error(f"Error in engineering_notes view: {str(e)}")
@@ -844,10 +831,12 @@ def medical_notes(request):
         college_id = request.GET.get('college')
         branch_id = request.GET.get('branch')
         year_id = request.GET.get('year')
+        syllabus_year = request.GET.get('syllabus_year')
         
         branches = []
         years = []
         subjects = []
+        syllabus_years = []
         
         if college_id:
             try:
@@ -860,18 +849,34 @@ def medical_notes(request):
                     
                     if year_id:
                         year = years.get(id=year_id)
+                        syllabus_years = list(year.subjects.order_by('syllabus_year').values_list('syllabus_year', flat=True).distinct())
                         subjects = year.subjects.all()
+                        if syllabus_year:
+                            subjects = subjects.filter(syllabus_year=syllabus_year)
             except (College.DoesNotExist, Branch.DoesNotExist, Year.DoesNotExist):
                 messages.error(request, 'Invalid selection.')
+
+        branch_data = list(Branch.objects.filter(college__type='medical').values('id', 'name', 'college_id'))
+        year_data = list(Year.objects.filter(branch__college__type='medical').values('id', 'name', 'branch_id'))
+        # build a map of year_id -> syllabus years for client-side population
+        syllabus_map = {}
+        for y in Year.objects.filter(branch__college__type='medical'):
+            sy = list(y.subjects.order_by('syllabus_year').values_list('syllabus_year', flat=True).distinct())
+            syllabus_map[y.pk] = [s for s in sy if s]
         
         return render(request, 'smru/medical.html', {
             'colleges': colleges_list,
             'branches': branches,
             'years': years,
             'subjects': subjects,
+            'syllabus_years': [y for y in syllabus_years if y],
             'selected_college': college_id,
             'selected_branch': branch_id,
             'selected_year': year_id,
+            'selected_syllabus_year': syllabus_year,
+            'branch_data': branch_data,
+            'year_data': year_data,
+            'syllabus_years_map': syllabus_map,
         })
     except Exception as e:
         logger.error(f"Error in medical_notes view: {str(e)}")
@@ -928,6 +933,11 @@ def privacy_policy(request):
 def terms_of_service(request):
     """Terms of service informational page."""
     return render(request, 'smru/terms_of_service.html')
+
+
+def about(request):
+    """Simple About Us page."""
+    return render(request, 'smru/about.html')
 
 
 # ======================== COMPLAINTS ========================

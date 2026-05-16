@@ -24,6 +24,7 @@ urlpatterns = [
     path('medical/', views.medical_notes, name='medical'),
     path('student-files/', views.student_files, name='student_files'),
     path('team/', views.team, name='team'),
+    path('about/', views.about, name='about'),
     path('privacy-policy/', views.privacy_policy, name='privacy_policy'),
     path('terms-of-service/', views.terms_of_service, name='terms_of_service'),
     
