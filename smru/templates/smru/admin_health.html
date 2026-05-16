@@ -1,0 +1,62 @@
+{% extends 'smru/base.html' %}
+
+{% block title %}Admin Health Check - SMRU College Portal{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="card-title mb-3">Admin Health Check</h2>
+                    <p class="text-muted">This page is visible only to admin users.</p>
+
+                    <div class="mb-3">
+                        <strong>Site status:</strong>
+                        <span class="badge bg-success">{{ health.site_status }}</span>
+                    </div>
+
+                    <div class="mb-3">
+                        <strong>Timestamp:</strong>
+                        {{ health.timestamp|date:'Y-m-d H:i:s' }}
+                    </div>
+
+                    <div class="mb-3">
+                        <strong>Database status:</strong>
+                        {% if health.database_status == 'ok' %}
+                        <span class="badge bg-success">ok</span>
+                        {% else %}
+                        <span class="badge bg-danger">{{ health.database_status }}</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <strong>Email configuration:</strong>
+                        <span class="badge bg-info text-dark">{{ health.email_status }}</span>
+                    </div>
+
+                    <div class="mb-3">
+                        <strong>Configured admin emails:</strong>
+                        <ul>
+                            {% for email in health.admin_emails %}
+                                <li>{{ email }}</li>
+                            {% empty %}
+                                <li><em>No admin email configured</em></li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="mb-3">
+                        <strong>Public site URL:</strong>
+                        <a href="{{ site_url }}" target="_blank">{{ site_url }}</a>
+                    </div>
+
+                    <div class="mt-4">
+                        <a href="{% url 'smru:staff_notifications' %}" class="btn btn-primary">Back to Admin Notifications</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

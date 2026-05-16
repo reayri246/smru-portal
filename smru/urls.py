@@ -15,6 +15,7 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('notifications/', views.notifications_view, name='notifications'),
     path('staff-notifications/', views.staff_notifications_view, name='staff_notifications'),
+    path('admin-health/', views.admin_health, name='admin_health'),
     path('events/', views.events_view, name='events'),
     
     # Study materials

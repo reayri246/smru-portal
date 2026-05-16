@@ -8,15 +8,17 @@ from django.db.models import Q
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.urls import reverse
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseForbidden
 from django.core.cache import cache
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage, send_mail
 from urllib.parse import quote_plus
 import logging
 import secrets
 import hashlib
 import time
+import os
+import traceback
 import requests
 
 from .models import (College, Notification, Event, Complaint, StudentProfile, 
@@ -103,6 +105,59 @@ def send_email_notification(subject, message, recipient_email):
         return True
     except Exception as e:
         logger.error(f"Error sending complaint email to {recipient_email}: {str(e)}")
+        send_admin_alert(
+            subject='SMRU Email Sending Failure',
+            message=(
+                f'Failed to send an email notification to {recipient_email}.\n\n'
+                f'Error: {str(e)}\n\n'
+                'Please investigate the email subsystem for failures.'
+            ),
+            attach_db=True,
+        )
+        return False
+
+
+def get_admin_recipients():
+    """Return a list of configured admin email recipients."""
+    recipients = []
+    admin_list = getattr(settings, 'ADMINS', []) or []
+    for _, email in admin_list:
+        if email:
+            recipients.append(email)
+    admin_email = getattr(settings, 'ADMIN_EMAIL', '')
+    if admin_email and admin_email not in recipients:
+        recipients.append(admin_email)
+    return recipients
+
+
+def send_admin_alert(subject, message, attach_db=False):
+    """Send an alert email to configured admins, optionally attaching the SQLite database."""
+    recipients = get_admin_recipients()
+    if not recipients:
+        logger.warning('No admin email configured to receive alerts.')
+        return False
+
+    from_email = settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER
+    email = EmailMessage(subject, message, from_email, recipients)
+
+    if attach_db:
+        try:
+            db_path = settings.DATABASES['default'].get('NAME', '')
+            if db_path and os.path.exists(db_path):
+                with open(db_path, 'rb') as db_file:
+                    email.attach(os.path.basename(db_path), db_file.read(), 'application/octet-stream')
+                    logger.info(f'Attached database file {db_path} to admin alert email.')
+        except Exception as attach_error:
+            logger.error(f'Unable to attach database file to admin alert email: {str(attach_error)}')
+
+    try:
+        email.send(fail_silently=False)
+        logger.info('Admin alert email sent successfully.')
+        return True
+    except Exception as alert_error:
+        logger.error(f'Error sending admin alert email: {str(alert_error)}')
+        if not attach_db:
+            return send_admin_alert(subject, message, attach_db=True)
         return False
 
 
@@ -409,7 +464,7 @@ def forgot_password(request):
                     token=token,
                     otp=otp,
                     reset_method=reset_method,
-                    expires_at=timezone.now() + timezone.timedelta(hours=24)
+                    expires_at=timezone.now() + timezone.timedelta(minutes=5)
                 )
 
                 reset_url = build_public_url(reverse('smru:reset_password', args=[token]))
@@ -419,7 +474,7 @@ def forgot_password(request):
                     "A password reset request was received for your account. "
                     f"Use the following OTP to verify the reset request:\n\nOTP: {otp}\n\n"
                     f"Then open the reset page: {reset_url}\n\n"
-                    "This OTP expires in 24 hours. If you did not request a password reset, please ignore this message.\n\n"
+                    "This OTP expires in 5 minutes. If you did not request a password reset, please ignore this message.\n\n"
                     "Thank you,\nSMRU College Portal Team"
                 )
 
@@ -543,6 +598,36 @@ def home(request):
         logger.error(f"Error in home view: {str(e)}")
         messages.error(request, 'An error occurred while loading the home page.')
         return render(request, 'smru/home.html', {})
+
+
+@login_required(login_url='smru:login')
+def admin_health(request):
+    """Admin-only health view showing basic service status."""
+    if not request.user.is_staff and not request.user.is_superuser:
+        return HttpResponseForbidden('Access denied.')
+
+    health = {
+        'site_status': 'ok',
+        'timestamp': timezone.now(),
+        'database_status': 'unknown',
+        'email_status': 'configured' if getattr(settings, 'EMAIL_HOST', '') else 'not configured',
+        'admin_emails': get_admin_recipients(),
+    }
+
+    try:
+        from django.db import connections
+        with connections['default'].cursor() as cursor:
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+        health['database_status'] = 'ok'
+    except Exception as e:
+        health['database_status'] = f'error: {str(e)}'
+        logger.error(f'Health check database error: {str(e)}')
+
+    return render(request, 'smru/admin_health.html', {
+        'health': health,
+        'site_url': getattr(settings, 'SITE_URL', ''),
+    })
 
 
 def notifications_view(request):

@@ -79,6 +79,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'smru.middleware.AdminErrorAlertMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -377,6 +378,11 @@ LOGGING = {
             'handlers': ['console', 'file'],
             'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
         },
+        'django.request': {
+            'handlers': ['console', 'file', 'mail_admins'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
         'smru': {
             'handlers': ['console', 'file'],
             'level': 'INFO',
@@ -400,6 +406,10 @@ EMAIL_USE_TLS = config('EMAIL_USE_TLS', cast=bool)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
+ADMIN_EMAIL = config('ADMIN_EMAIL', default='')
+ADMINS = [('Admin', ADMIN_EMAIL)] if ADMIN_EMAIL else []
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+EMAIL_SUBJECT_PREFIX = '[SMRU Portal] '
 
 # Optional Twilio WhatsApp integration for complaint notifications
 TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='')
