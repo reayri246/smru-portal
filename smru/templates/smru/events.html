@@ -30,12 +30,12 @@
     </div>
 
     {% if events %}
-    <div class="row g-3">
+    <div class="row g-3 justify-content-center">
         {% for event in events %}
-        <div class="col-md-6 col-lg-4">
-            <div class="card h-100">
+        <div class="col-auto">
+            <div class="card" style="width:auto; max-width:90vw; min-width:320px;">
                 {% if event.image %}
-                <img src="{{ event.image.url }}" class="card-img-top" alt="{{ event.name }}" style="height: 250px; object-fit: cover;">
+                <img src="{{ event.image.url }}" class="card-img-top" alt="{{ event.name }}" style="height: 250px; object-fit: cover; width:100%;">
                 {% else %}
                 <div style="height: 250px; background-color: #e9ecef; display: flex; align-items: center; justify-content: center;">
                     <i class="fas fa-calendar-alt fa-4x text-muted"></i>
@@ -56,7 +56,7 @@
                         {% endif %}
                     </div>
                     <h5 class="card-title">{{ event.name }}</h5>
-                    <p class="card-text text-muted">{{ event.description|truncatewords:15 }}</p>
+                    <p class="card-text text-muted">{{ event.description|truncatewords:20 }}</p>
                     
                     <div class="event-details mb-3">
                         <small class="d-block mb-2">
