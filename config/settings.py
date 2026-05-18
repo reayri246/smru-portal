@@ -10,6 +10,7 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 from decouple import config, Csv
 from urllib.parse import urlparse
 
@@ -17,6 +18,22 @@ from urllib.parse import urlparse
 import mimetypes
 if os.name == 'nt':
     mimetypes.MimeTypes.read_windows_registry = lambda self: None
+
+# Fix Django 4.2 / Python 3.14 template Context copy bug in BaseContext.
+# This avoids `copy(super())` producing a super proxy object that cannot accept new attributes.
+if sys.version_info >= (3, 14):
+    try:
+        from django.template.context import BaseContext
+
+        def _patched_basecontext_copy(self):
+            duplicate = self.__class__.__new__(self.__class__)
+            duplicate.__dict__.update(getattr(self, '__dict__', {}))
+            duplicate.dicts = self.dicts[:]
+            return duplicate
+
+        BaseContext.__copy__ = _patched_basecontext_copy
+    except Exception:
+        pass
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
