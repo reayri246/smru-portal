@@ -20,12 +20,17 @@ import time
 import os
 import traceback
 import requests
+from datetime import timedelta
 
 from .models import (College, Notification, Event, Complaint, StudentProfile, 
                      Branch, Year, Subject, UserRole, LoginRequest, LoginActivity, 
-                     ComplaintCategory, ComplaintPerson, PasswordResetRequest, UserAccountLock)
+                     ComplaintCategory, ComplaintPerson, PasswordResetRequest, UserAccountLock,
+                     UnlockRequest, ListedStudent, ExcelImportHistory,
+                     RegistrationApprovalRequest, RegistrationAuditLog, StaffPermission, ReminderLog, StaffLockLog)
 from .forms import (SignUpForm, LoginForm, ComplaintForm, StudentProfileForm,
-                    ForgotPasswordForm, ResetPasswordForm, OtpVerificationForm)
+                    ForgotPasswordForm, ResetPasswordForm, OtpVerificationForm,
+                    UnlockRequestForm, UnlockOtpForm)
+from .models import SignupVerification
 
 logger = logging.getLogger('smru')
 
@@ -37,6 +42,17 @@ def build_public_url(path):
     if path.startswith('/'):
         return f"{site_url}{path}"
     return f"{site_url}/{path}"
+
+
+def generate_login_captcha(request):
+    """Generate a simple math captcha for login verification."""
+    a = secrets.randbelow(9) + 1
+    b = secrets.randbelow(9) + 1
+    question = f"What is {a} + {b}?"
+    answer = str(a + b)
+    request.session['login_captcha_question'] = question
+    request.session['login_captcha_answer'] = answer
+    return question
 
 
 # Rate limiting constants
@@ -208,6 +224,209 @@ def create_system_notification(title, description, link=None, priority='high', i
         recipient_email=recipient_email,
     )
 
+
+# ======================== APPROVAL WORKFLOW EMAIL FUNCTIONS ========================
+
+def send_registration_assigned_email(registration_request):
+    """Send email to assigned staff when a new registration request is created"""
+    try:
+        staff_user = registration_request.assigned_staff
+        if not staff_user or not staff_user.email:
+            logger.warning(f'Cannot send assignment email: staff user missing for request {registration_request.id}')
+            return False
+        
+        student = registration_request.user
+        college_name = registration_request.college.name if registration_request.college else 'N/A'
+        branch_name = registration_request.branch.name if registration_request.branch else registration_request.branch_name or 'N/A'
+        
+        subject = f'New Registration Request - {student.get_full_name()} ({student.username})'
+        
+        message = f"""
+Dear {staff_user.get_full_name()},
+
+A new student registration request has been assigned to you for review and approval.
+
+STUDENT DETAILS:
+================
+Name: {student.get_full_name()}
+Username: {student.username}
+Email: {student.email}
+Roll Number: {registration_request.roll_number}
+College: {college_name}
+Branch: {branch_name}
+
+ACTION REQUIRED:
+================
+Please review the student documents and approve or reject this registration request within 4 hours.
+After 4 hours of inaction, your admin permissions will be temporarily locked.
+
+Access the admin panel to review and take action:
+{getattr(settings, 'SITE_URL', 'http://localhost:8000').rstrip('/')}/admin/smru/registrationapprovalrequest/{registration_request.id}/change/
+
+TIMELINE:
+=========
+- 1 hour: First reminder sent
+- 30 minutes later: Additional reminders (every 30 minutes)
+- 4 hours: Your admin permissions locked
+- 12 hours: Request deleted and student notified to re-register
+
+Best regards,
+SMRU Portal Admin Team
+        """
+        
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER,
+            [staff_user.email],
+            fail_silently=False,
+        )
+        logger.info(f'Sent registration assignment email to {staff_user.email} for request {registration_request.id}')
+        return True
+        
+    except Exception as e:
+        logger.error(f'Error sending registration assignment email for request {registration_request.id}: {str(e)}')
+        return False
+
+
+def send_registration_approved_email(registration_request):
+    """Send email to student when their registration is approved"""
+    try:
+        student = registration_request.user
+        college_name = registration_request.college.name if registration_request.college else 'N/A'
+        
+        subject = f'Registration Approved - Welcome to {college_name}!'
+        
+        message = f"""
+Dear {student.get_full_name()},
+
+Congratulations! Your registration request has been APPROVED.
+
+REGISTRATION DETAILS:
+====================
+College: {college_name}
+Username: {student.username}
+Status: Approved
+
+NEXT STEPS:
+===========
+You can now log in to the portal using your credentials:
+{getattr(settings, 'SITE_URL', 'http://localhost:8000').rstrip('/')}/login/
+
+If you have any questions or need assistance, please contact the portal support.
+
+Best regards,
+SMRU Portal Admin Team
+        """
+        
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER,
+            [student.email],
+            fail_silently=False,
+        )
+        logger.info(f'Sent registration approval email to {student.email} for request {registration_request.id}')
+        return True
+        
+    except Exception as e:
+        logger.error(f'Error sending registration approval email for request {registration_request.id}: {str(e)}')
+        return False
+
+
+def send_registration_rejected_email(registration_request, reason=''):
+    """Send email to student when their registration is rejected"""
+    try:
+        student = registration_request.user
+        college_name = registration_request.college.name if registration_request.college else 'N/A'
+        
+        subject = f'Registration Status Update - {college_name}'
+        
+        reason_text = f'\n\nREJECTION REASON:\n================\n{reason}' if reason else ''
+        
+        message = f"""
+Dear {student.get_full_name()},
+
+Your registration request has been REJECTED by the verification staff.
+
+REGISTRATION DETAILS:
+====================
+College: {college_name}
+Username: {student.username}
+Status: Rejected{reason_text}
+
+NEXT STEPS:
+===========
+If you believe this is an error, please contact the portal support or your college administrator.
+
+Best regards,
+SMRU Portal Admin Team
+        """
+        
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER,
+            [student.email],
+            fail_silently=False,
+        )
+        logger.info(f'Sent registration rejection email to {student.email} for request {registration_request.id}')
+        return True
+        
+    except Exception as e:
+        logger.error(f'Error sending registration rejection email for request {registration_request.id}: {str(e)}')
+        return False
+
+
+def send_registration_reregister_email(registration_request):
+    """Send email to student when their request expires and they need to re-register"""
+    try:
+        student = registration_request.user
+        college_name = registration_request.college.name if registration_request.college else 'N/A'
+        
+        subject = f'Registration Request Expired - Please Re-Register'
+        
+        message = f"""
+Dear {student.get_full_name()},
+
+Your registration request submitted on {registration_request.created_at} has expired 
+due to lack of response from the responsible staff member.
+
+DETAILS:
+========
+College: {college_name}
+Username: {student.username}
+Submitted: {registration_request.created_at}
+Expired: No response from staff within 12 hours
+
+ACTION REQUIRED:
+================
+Please register again at the portal. Your previous registration data will be cleared.
+
+Registration Link:
+{getattr(settings, 'SITE_URL', 'http://localhost:8000').rstrip('/')}/signup/
+
+If you have questions, please contact portal support.
+
+Best regards,
+SMRU Portal Admin Team
+        """
+        
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER,
+            [student.email],
+            fail_silently=False,
+        )
+        logger.info(f'Sent re-register email to {student.email} for request {registration_request.id}')
+        return True
+        
+    except Exception as e:
+        logger.error(f'Error sending registration re-register email for request {registration_request.id}: {str(e)}')
+        return False
+
+
 # ======================== AUTHENTICATION VIEWS ========================
 
 def signup(request):
@@ -243,7 +462,7 @@ def signup(request):
                     college_name = college_obj.name if college_obj else ''
                     is_from_listed = college_obj is not None
                 
-                StudentProfile.objects.create(
+                student_profile = StudentProfile.objects.create(
                     user=user,
                     roll_number=roll_number,
                     college_name=college_name,
@@ -257,8 +476,110 @@ def signup(request):
                     is_from_listed_college=is_from_listed,
                     is_approved=False  # Needs admin approval
                 )
-                
-                logger.info(f"New student registered: {user.username}, from {'listed' if is_from_listed else 'unlisted'} college")
+
+                # Create registration approval request and audit log
+                id_card = form.cleaned_data.get('id_card')
+                pan_card = form.cleaned_data.get('pan_card')
+                live_photo = form.cleaned_data.get('live_photo')
+
+                if not is_from_listed:
+                    # Non-listed college: require id proof and live selfie
+                    if not (live_photo and (id_card or pan_card)):
+                        # Missing required documents: reject signup and cleanup
+                        logger.warning(f"Non-listed signup missing documents for user {user.username}")
+                        LoginRequest.objects.filter(user=user).delete()
+                        user.delete()
+                        messages.error(request, 'For non-listed colleges you must upload a proof document (ID or PAN) and a live selfie.')
+                        return redirect('smru:signup')
+                    reg = RegistrationApprovalRequest.objects.create(
+                        user=user,
+                        student_profile=student_profile,
+                        roll_number=roll_number,
+                        email=user.email,
+                        source='non_listed',
+                        id_proof=id_card if id_card else None,
+                        pan_card=pan_card if pan_card else None,
+                        live_selfie=live_photo,
+                        verification_passed=False,
+                        verification_details='Pending manual verification (non-listed)'
+                    )
+                    # Assign to verification staff (department match if possible)
+                    assigned = User.objects.filter(user_roles__role__in=['hod','faculty'], user_roles__department__iexact=student_profile.branch_name).first()
+                    if assigned:
+                        reg.assigned_staff = assigned
+                        reg.assigned_at = timezone.now()
+                        reg.save()
+                    RegistrationAuditLog.objects.create(request=reg, action='submitted', performed_by=None, details='Non-listed registration submitted')
+                else:
+                    # Listed college: match against ListedStudent and assign to staff
+                    logger.info(f"Listed college signup for user {user.username}, attempting ListedStudent match")
+                    
+                    # Try to match by roll number and email
+                    listed_student = ListedStudent.objects.filter(
+                        college=college_obj,
+                        roll_number=roll_number,
+                        email=user.email
+                    ).first()
+                    
+                    if not listed_student:
+                        # Try matching by email only if roll number didn't match
+                        listed_student = ListedStudent.objects.filter(
+                            college=college_obj,
+                            email=user.email
+                        ).first()
+                    
+                    if listed_student:
+                        # Match found: create request with assigned staff
+                        logger.info(f"ListedStudent match found for {user.username}: {listed_student.id}")
+                        reg = RegistrationApprovalRequest.objects.create(
+                            user=user,
+                            student_profile=student_profile,
+                            college=college_obj,
+                            branch=listed_student.branch,
+                            roll_number=roll_number,
+                            email=user.email,
+                            source='listed',
+                            id_proof=id_card if id_card else None,
+                            pan_card=pan_card if pan_card else None,
+                            live_selfie=live_photo,
+                            assigned_staff=listed_student.assigned_staff,
+                            assigned_at=timezone.now(),
+                            verification_passed=False,
+                            verification_details='Pending staff verification (listed)'
+                        )
+                        RegistrationAuditLog.objects.create(
+                            request=reg, 
+                            action='submitted', 
+                            performed_by=None, 
+                            details=f'Listed college registration from Excel list (ID: {listed_student.id})'
+                        )
+                        
+                        # Send initial approval request email to assigned staff
+                        if listed_student.assigned_staff and listed_student.assigned_staff.email:
+                            send_registration_assigned_email(reg)
+                            logger.info(f"Initial registration request email sent to {listed_student.assigned_staff.email}")
+                    else:
+                        # No match found: create request without staff assignment
+                        logger.info(f"No ListedStudent match for {user.username}, creating request without staff assignment")
+                        reg = RegistrationApprovalRequest.objects.create(
+                            user=user,
+                            student_profile=student_profile,
+                            college=college_obj,
+                            roll_number=roll_number,
+                            email=user.email,
+                            source='listed',
+                            id_proof=id_card if id_card else None,
+                            pan_card=pan_card if pan_card else None,
+                            live_selfie=live_photo,
+                            verification_passed=False,
+                            verification_details='Pending manual assignment and verification'
+                        )
+                        RegistrationAuditLog.objects.create(
+                            request=reg, 
+                            action='submitted', 
+                            performed_by=None, 
+                            details='Listed college registration (no staff match)'
+                        )
             else:
                 logger.info(f"New {role} user registered: {user.username}")
 
@@ -285,131 +606,248 @@ def signup(request):
     })
 
 
+def request_unlock(request):
+    """Request unlock flow: user requests account unlock with OTP verification."""
+    if request.method == 'POST':
+        if 'send_otp' in request.POST:
+            form = UnlockRequestForm(request.POST)
+            if form.is_valid():
+                identifier = form.cleaned_data['username_or_email'].strip()
+                # Find user by username or email
+                user = None
+                try:
+                    user = User.objects.get(username=identifier)
+                except User.DoesNotExist:
+                    try:
+                        user = User.objects.get(email=identifier)
+                    except User.DoesNotExist:
+                        user = None
+
+                if not user:
+                    messages.error(request, 'No account found with that username or email.')
+                    return redirect('smru:request_unlock')
+
+                # Create UnlockRequest
+                token = secrets.token_urlsafe(24)
+                otp = str(secrets.randbelow(900000) + 100000)  # 6-digit
+                expires_at = timezone.now() + timezone.timedelta(minutes=30)
+                unlock = UnlockRequest.objects.create(
+                    user=user,
+                    token=token,
+                    otp=otp,
+                    expires_at=expires_at,
+                    status='pending'
+                )
+
+                # Send OTP to user's email
+                subject = 'SMRU Portal - Unlock Request OTP'
+                message = f"Your OTP to request account unlock is: {otp}. It expires in 30 minutes."
+                send_email_notification(subject, message, user.email)
+
+                messages.success(request, 'OTP sent to your registered email. Enter the OTP to confirm the unlock request.')
+                otp_form = UnlockOtpForm(initial={'token': token})
+                return render(request, 'smru/request_unlock.html', {'otp_form': otp_form, 'sent': True})
+        elif 'verify_otp' in request.POST:
+            otp_form = UnlockOtpForm(request.POST)
+            if otp_form.is_valid():
+                token = otp_form.cleaned_data['token']
+                otp = otp_form.cleaned_data['otp'].strip()
+                try:
+                    unlock = UnlockRequest.objects.get(token=token)
+                except UnlockRequest.DoesNotExist:
+                    messages.error(request, 'Invalid unlock request. Please start again.')
+                    return redirect('smru:request_unlock')
+
+                if unlock.expires_at and timezone.now() > unlock.expires_at:
+                    unlock.status = 'expired'
+                    unlock.save()
+                    messages.error(request, 'OTP expired. Please request again.')
+                    return redirect('smru:request_unlock')
+
+                if otp != unlock.otp:
+                    messages.error(request, 'Invalid OTP. Please try again.')
+                    return render(request, 'smru/request_unlock.html', {'otp_form': otp_form, 'sent': True})
+
+                # Mark verified and notify admins + assigned staff
+                unlock.otp_verified = True
+                unlock.status = 'sent'
+                unlock.assigned_at = timezone.now()
+
+                # Try to find assigned staff based on student's branch
+                assigned = None
+                try:
+                    student_profile = unlock.user.student_profile
+                    branch_name = student_profile.branch_name
+                    assigned = User.objects.filter(user_roles__role__in=['hod','faculty'], user_roles__department__iexact=branch_name).first()
+                except Exception:
+                    assigned = None
+
+                if assigned:
+                    unlock.assigned_staff = assigned
+                unlock.save()
+
+                # Email admins
+                admin_recipients = get_admin_recipients()
+                subject_admin = f"Unlock request for user {unlock.user.username}"
+                details = f"User {unlock.user.get_full_name()} ({unlock.user.username}, {unlock.user.email}) has requested an account unlock."
+                details += f"\nRequested at: {unlock.requested_at}\n"
+                if assigned:
+                    details += f"Assigned staff: {assigned.get_full_name()} ({assigned.email})\n"
+
+                # send to admins
+                for adm in admin_recipients:
+                    send_email_notification(subject_admin, details, adm)
+
+                # send to assigned staff
+                if assigned and assigned.email:
+                    send_email_notification(subject_admin, details, assigned.email)
+
+                messages.success(request, 'Your unlock request has been submitted to admin and assigned staff.')
+                return redirect('smru:login')
+
+    else:
+        form = UnlockRequestForm()
+    return render(request, 'smru/request_unlock.html', {'form': form})
+
+
+# Admin Excel upload removed
+
+
 def login_view(request):
     """User login view - enforce global per-account lockout after repeated login attempts."""
     if request.user.is_authenticated:
         return redirect('smru:home')
-    
-    if request.method == 'POST':
-        form = LoginForm(request.POST)
-        if form.is_valid():
-            username_or_email = form.cleaned_data['username']
-            password = form.cleaned_data['password']
 
-            # Determine user identity for global lockout tracking
-            user_to_check = None
+    if request.method == 'GET':
+        generate_login_captcha(request)
+        form = LoginForm(request=request)
+        return render(request, 'smru/login.html', {'form': form})
+
+    form = LoginForm(request.POST, request=request)
+    if form.is_valid():
+        username_or_email = form.cleaned_data['username']
+        password = form.cleaned_data['password']
+
+        # Determine user identity for global lockout tracking
+        user_to_check = None
+        try:
+            user_to_check = User.objects.get(username=username_or_email)
+        except User.DoesNotExist:
             try:
-                user_to_check = User.objects.get(username=username_or_email)
+                user_to_check = User.objects.get(email=username_or_email)
             except User.DoesNotExist:
-                try:
-                    user_to_check = User.objects.get(email=username_or_email)
-                except User.DoesNotExist:
-                    user_to_check = None
+                user_to_check = None
 
-            login_identifier = get_login_identifier(username_or_email, user=user_to_check)
-            if is_rate_limited(login_identifier):
-                remaining_time = LOGIN_ATTEMPTS_TIMEOUT // 60  # Convert to minutes
-                messages.error(request, f'Too many login attempts. This account is locked for {remaining_time} minutes.')
+        login_identifier = get_login_identifier(username_or_email, user=user_to_check)
+        if is_rate_limited(login_identifier):
+            remaining_time = LOGIN_ATTEMPTS_TIMEOUT // 60  # Convert to minutes
+            messages.error(request, f'Too many login attempts. This account is locked for {remaining_time} minutes.')
+            generate_login_captcha(request)
+            return render(request, 'smru/login.html', {'form': form})
+
+        # Check account lock status
+        if user_to_check:
+            account_lock, created = UserAccountLock.objects.get_or_create(user=user_to_check)
+            if account_lock.is_account_locked():
+                remaining_time = int((account_lock.unlock_at - timezone.now()).total_seconds() // 60)
+                messages.error(request, f'Account is temporarily locked due to excessive login attempts. Try again in {remaining_time} minutes.')
+                generate_login_captcha(request)
                 return render(request, 'smru/login.html', {'form': form})
-            
-            # Check account lock status
-            if user_to_check:
-                account_lock, created = UserAccountLock.objects.get_or_create(user=user_to_check)
-                if account_lock.is_account_locked():
-                    remaining_time = int((account_lock.unlock_at - timezone.now()).total_seconds() // 60)
-                    messages.error(request, f'Account is temporarily locked due to excessive login attempts. Try again in {remaining_time} minutes.')
-                    return render(request, 'smru/login.html', {'form': form})
-                
-                # Check daily login limit
-                if not account_lock.can_login_today():
-                    account_lock.lock_account('Exceeded daily login limit', 60)  # Lock for 1 hour
-                    messages.error(request, 'You have exceeded the maximum number of logins allowed per day. Account locked for 1 hour.')
-                    return render(request, 'smru/login.html', {'form': form})
-            
-            # Try to authenticate by username first, then by email
-            user = authenticate(request, username=username_or_email, password=password)
-            if user is None and user_to_check is not None:
-                user = authenticate(request, username=user_to_check.username, password=password)
 
-            if user is not None:
-                # Check if user is active
-                if not user.is_active:
-                    increment_login_attempts(login_identifier)
-                    remaining_attempts = get_remaining_attempts(login_identifier)
-                    messages.error(request, 'Your account is deactivated. Please contact admin.')
-                    return render(request, 'smru/login.html', {'form': form})
-                
-                try:
-                    user_role = user.user_role if hasattr(user, 'user_role') else None
-                    
-                    try:
-                        login_request = LoginRequest.objects.get(user=user)
-                        if login_request.status == 'pending':
-                            increment_login_attempts(login_identifier)
-                            messages.warning(request, 'Your login request is pending admin approval. Please wait.')
-                            return render(request, 'smru/login.html', {'form': form})
-                        elif login_request.status == 'rejected':
-                            increment_login_attempts(login_identifier)
-                            messages.error(request, 'Your login request has been rejected. Please contact admin for details.')
-                            return render(request, 'smru/login.html', {'form': form})
-                        elif login_request.status == 'approved':
-                            if hasattr(user, 'student_profile') and not user.student_profile.is_approved:
-                                user.student_profile.is_approved = True
-                                user.student_profile.save()
-                    except LoginRequest.DoesNotExist:
-                        login_request = None
+            # Check daily login limit
+            if not account_lock.can_login_today():
+                account_lock.lock_account('Exceeded daily login limit', 60)  # Lock for 1 hour
+                messages.error(request, 'You have exceeded the maximum number of logins allowed per day. Account locked for 1 hour.')
+                generate_login_captcha(request)
+                return render(request, 'smru/login.html', {'form': form})
 
-                    if not login_request and hasattr(user, 'student_profile') and user_role.role == 'student' and not user.student_profile.is_approved:
-                        increment_login_attempts(login_identifier)
-                        messages.error(request, 'Your profile is pending admin approval. Please wait for final approval.')
-                        return render(request, 'smru/login.html', {'form': form})
-                
-                except (UserRole.DoesNotExist, LoginRequest.DoesNotExist, AttributeError) as e:
-                    logger.error(f"Error checking user role/profile: {str(e)}")
-                    messages.error(request, 'Your profile is incomplete. Please contact admin.')
-                    return render(request, 'smru/login.html', {'form': form})
-                
-                # Reset login attempts now that the account is fully allowed to login
-                reset_login_attempts(login_identifier)
+        # Try to authenticate by username first, then by email
+        user = authenticate(request, username=username_or_email, password=password)
+        if user is None and user_to_check is not None:
+            user = authenticate(request, username=user_to_check.username, password=password)
 
-                # Increment daily login count
-                if user_to_check:
-                    account_lock, created = UserAccountLock.objects.get_or_create(user=user_to_check)
-                    account_lock.increment_daily_login()
-
-                # User can login
-                login(request, user)
-                
-                # Record login activity
-                LoginActivity.objects.create(
-                    user=user,
-                    login_time=timezone.now(),
-                    ip_address=request.META.get('REMOTE_ADDR', ''),
-                    user_agent=request.META.get('HTTP_USER_AGENT', '')
-                )
-                
-                # Session expiry: browser close by default
-                if request.POST.get('remember_me') == 'on':
-                    request.session.set_expiry(1209600)  # 2 weeks
-                else:
-                    request.session.set_expiry(0)  # expire at browser close
-
-                logger.info(f"User logged in: {user.username}")
-                messages.success(request, f'Welcome back, {user.first_name or user.username}!')
-
-                next_url = request.GET.get('next', 'smru:home')
-                return redirect(next_url)
-            else:
-                # Increment login attempts for failed login or blocked account
+        if user is not None:
+            # Check if user is active
+            if not user.is_active:
                 increment_login_attempts(login_identifier)
                 remaining_attempts = get_remaining_attempts(login_identifier)
-                if remaining_attempts > 0:
-                    messages.error(request, f'Invalid username/email or password. {remaining_attempts} attempts remaining.')
-                else:
-                    messages.error(request, f'Invalid username/email or password. Account temporarily locked for {LOGIN_ATTEMPTS_TIMEOUT // 60} minutes due to multiple attempts.')
-    else:
-        form = LoginForm()
-    
+                messages.error(request, 'Your account is deactivated. Please contact admin.')
+                generate_login_captcha(request)
+                return render(request, 'smru/login.html', {'form': form})
+
+            try:
+                user_role = getattr(user, 'user_role', None)
+
+                try:
+                    login_request = LoginRequest.objects.get(user=user)
+                    if login_request.status == 'pending':
+                        increment_login_attempts(login_identifier)
+                        messages.warning(request, 'Your login request is pending admin approval. Please wait.')
+                        generate_login_captcha(request)
+                        return render(request, 'smru/login.html', {'form': form})
+                    elif login_request.status == 'rejected':
+                        increment_login_attempts(login_identifier)
+                        messages.error(request, 'Your login request has been rejected. Please contact admin for details.')
+                        generate_login_captcha(request)
+                        return render(request, 'smru/login.html', {'form': form})
+                    elif login_request.status == 'approved':
+                        if hasattr(user, 'student_profile') and not user.student_profile.is_approved:
+                            user.student_profile.is_approved = True
+                            user.student_profile.save()
+                except LoginRequest.DoesNotExist:
+                    login_request = None
+
+                if not login_request and hasattr(user, 'student_profile') and getattr(user_role, 'role', '') == 'student' and not user.student_profile.is_approved:
+                    increment_login_attempts(login_identifier)
+                    messages.error(request, 'Your profile is pending admin approval. Please wait for final approval.')
+                    generate_login_captcha(request)
+                    return render(request, 'smru/login.html', {'form': form})
+
+            except (UserRole.DoesNotExist, LoginRequest.DoesNotExist, AttributeError) as e:
+                logger.error(f"Error checking user role/profile: {str(e)}")
+                messages.error(request, 'Your profile is incomplete. Please contact admin.')
+                generate_login_captcha(request)
+                return render(request, 'smru/login.html', {'form': form})
+
+            # Reset login attempts now that the account is fully allowed to login
+            reset_login_attempts(login_identifier)
+
+            # Increment daily login count
+            if user_to_check:
+                account_lock, created = UserAccountLock.objects.get_or_create(user=user_to_check)
+                account_lock.increment_daily_login()
+
+            # User can login
+            login(request, user)
+
+            # Record login activity
+            LoginActivity.objects.create(
+                user=user,
+                login_time=timezone.now(),
+                ip_address=request.META.get('REMOTE_ADDR', ''),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+
+            # Session expiry: browser close by default
+            if request.POST.get('remember_me') == 'on':
+                request.session.set_expiry(1209600)  # 2 weeks
+            else:
+                request.session.set_expiry(0)  # expire at browser close
+
+            logger.info(f"User logged in: {user.username}")
+            messages.success(request, f'Welcome back, {user.first_name or user.username}!')
+
+            next_url = request.GET.get('next', 'smru:home')
+            return redirect(next_url)
+        else:
+            increment_login_attempts(login_identifier)
+            remaining_attempts = get_remaining_attempts(login_identifier)
+            if remaining_attempts > 0:
+                messages.error(request, f'Invalid username/email or password. {remaining_attempts} attempts remaining.')
+            else:
+                messages.error(request, f'Invalid username/email or password. Account temporarily locked for {LOGIN_ATTEMPTS_TIMEOUT // 60} minutes due to multiple attempts.')
+
+    generate_login_captcha(request)
     return render(request, 'smru/login.html', {'form': form})
 
 
@@ -660,7 +1098,8 @@ def notifications_view(request):
 def staff_notifications_view(request):
     """Staff-only notifications assigned to the logged-in user."""
     staff_roles = ['hod', 'chairman', 'principal', 'director', 'faculty', 'security', 'admin']
-    if not (hasattr(request.user, 'user_role') and request.user.user_role.role in staff_roles):
+    # allow superuser as well
+    if not (request.user.is_superuser or request.user.is_staff or getattr(getattr(request.user, 'user_role', None), 'role', '') in staff_roles):
         messages.warning(request, 'You do not have access to assigned notifications.')
         return redirect('smru:home')
 
@@ -1065,14 +1504,22 @@ def my_complaints(request):
 def manage_complaints(request):
     """Manage complaints based on user role"""
     try:
-        user_role = request.user.user_role
+        user_role = getattr(request.user, 'user_role', None)
     except AttributeError:
         messages.error(request, 'Your role is not configured. Please contact admin.')
         return redirect('smru:home')
+    # If staff account is locked, restrict access to only pending registration requests (handled via staff dashboard)
+    try:
+        account_lock = request.user.useraccountlock
+        if account_lock.is_account_locked():
+            messages.error(request, 'Your staff account is locked due to inactivity on assigned requests. Only pending registrations are accessible.')
+            return redirect('smru:home')
+    except Exception:
+        pass
     
     try:
         # Filter complaints based on role
-        if user_role.role in ['hod', 'chairman', 'principal', 'director', 'faculty', 'security', 'anti_ragging_team', 'she_team']:
+        if request.user.is_superuser or request.user.is_staff or getattr(user_role, 'role', '') in ['hod', 'chairman', 'principal', 'director', 'faculty', 'security', 'anti_ragging_team', 'she_team']:
             # Get complaints assigned to this user through ComplaintPerson or by matching email if user is not linked.
             complaints = Complaint.objects.none()
             complaint_person = None
@@ -1086,7 +1533,7 @@ def manage_complaints(request):
                 complaints = Complaint.objects.filter(person__email=request.user.email).order_by('-submitted_at')
             else:
                 complaints = Complaint.objects.none()
-        elif user_role.role == 'admin':
+        elif request.user.is_superuser or request.user.is_staff or getattr(user_role, 'role', '') == 'admin':
             complaints = Complaint.objects.all().order_by('-submitted_at')
         else:
             # Other roles don't have complaint management access
@@ -1157,8 +1604,8 @@ def complaint_detail(request, complaint_id):
         # Check if user has permission to view this complaint
         if request.user != complaint.user and not request.user.is_staff:
             try:
-                user_role = request.user.user_role
-                if user_role.role not in ['hod', 'chairman', 'principal', 'director', 'faculty', 'security', 'admin']:
+                user_role = getattr(request.user, 'user_role', None)
+                if getattr(user_role, 'role', '') not in ['hod', 'chairman', 'principal', 'director', 'faculty', 'security', 'admin']:
                     messages.error(request, 'You do not have permission to view this complaint.')
                     return redirect('smru:home')
             except:
@@ -1228,20 +1675,35 @@ def profile(request):
 def get_colleges_by_type(request):
     """AJAX endpoint to get colleges filtered by type"""
     college_type = request.GET.get('type', '')
-    
-    if not college_type:
-        return JsonResponse({'error': 'College type is required'}, status=400)
-    
     try:
-        colleges = College.objects.filter(type=college_type).values('id', 'name')
+        if college_type:
+            colleges = College.objects.filter(type=college_type).values('id', 'name')
+        else:
+            # No type requested -> return all colleges
+            colleges = College.objects.all().values('id', 'name', 'type')
+
         college_data = list(colleges)
-        # Always include "Other" option
+        # Always include "Other" option at the end
         college_data.append({'id': 'other', 'name': 'Other'})
         return JsonResponse({'colleges': college_data})
     except Exception as e:
         logger.error(f"Error fetching colleges by type: {str(e)}")
         return JsonResponse({'error': 'Failed to load colleges'}, status=500)
 
+@require_http_methods(["GET"])
+def get_branches_by_college(request):
+    """AJAX endpoint to get branch options for a selected college"""
+    college_id = request.GET.get('college_id', '')
+    if not college_id:
+        return JsonResponse({'branches': []})
+
+    try:
+        branches = Branch.objects.filter(college_id=college_id).values('id', 'name')
+        branches_data = list(branches)
+        return JsonResponse({'branches': branches_data})
+    except Exception as e:
+        logger.error(f"Error fetching branches by college: {str(e)}")
+        return JsonResponse({'error': 'Failed to load branches'}, status=500)
 
 def get_persons_by_category(request):
     """AJAX endpoint to get complaint persons filtered by category"""

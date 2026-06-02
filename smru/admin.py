@@ -8,14 +8,20 @@ from django.contrib.auth.admin import UserAdmin, GroupAdmin
 from django.contrib.auth.models import Group, User
 from django.core.cache import cache
 import logging
+import secrets
 
 logger = logging.getLogger('smru')
 
 from .models import (
     College, Branch, Year, Subject, Notification, Event, Complaint, StudentProfile,
     UserRole, ComplaintCategory, ComplaintPerson, LoginRequest, LoginActivity, 
-    Team, TeamMember, PasswordResetRequest, UserAccountLock
+    Team, TeamMember, PasswordResetRequest, UserAccountLock,
+    ExcelImportHistory, ListedStudent, SignupVerification,
+    RegistrationApprovalRequest, RegistrationAuditLog
 )
+# local views import for admin custom urls
+from . import views as smru_views
+# Excel-related models removed
 
 
 class YearSelect(forms.Select):
@@ -36,6 +42,7 @@ class YearSelect(forms.Select):
 
 class SecureAdminSite(AdminSite):
     """Custom admin site with enhanced security"""
+    index_template = 'smru/admin_index.html'
     site_header = "SMRU PORTAL ADMINISTRATOR"
     site_title = "SMRU Admin Portal"
     index_title = "Welcome to SMRU Admin Portal"
@@ -59,11 +66,16 @@ class SecureAdminSite(AdminSite):
         if request.user.is_superuser:
             return True
 
-        try:
-            user_role = request.user.user_role
-            return user_role.is_active and user_role.role in self.STAFF_ROLES
-        except UserRole.DoesNotExist:
+        user_role = getattr(request.user, 'user_role', None)
+        if not user_role:
             return False
+        return getattr(user_role, 'is_active', False) and getattr(user_role, 'role', '') in self.STAFF_ROLES
+
+    def get_urls(self):
+        return super().get_urls()
+
+    def index(self, request, extra_context=None):
+        return super().index(request, extra_context=extra_context)
 
 
 # Create secure admin site
@@ -81,10 +93,13 @@ class CollegeAdmin(admin.ModelAdmin):
     list_filter = ['type', 'created_at']
     search_fields = ['name', 'description']
     readonly_fields = ['created_at', 'updated_at']
+    # actions = ['upload_students_action']
     
     def branches_count(self, obj):
         return obj.branches.count()
     branches_count.short_description = 'Branches'
+
+    # Upload students action removed
 
 
 @admin.register(Branch)
@@ -92,10 +107,13 @@ class BranchAdmin(admin.ModelAdmin):
     list_display = ['name', 'college', 'years_count']
     list_filter = ['college']
     search_fields = ['name', 'code']
+    # actions = ['upload_students_for_branch']
     
     def years_count(self, obj):
         return obj.years.count()
     years_count.short_description = 'Years'
+
+    # Upload students for branch action removed
 
 
 @admin.register(Year)
@@ -242,6 +260,9 @@ class EventAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+
+# Excel admin removed
 
 
 @admin.register(Complaint)
@@ -656,3 +677,251 @@ class PasswordResetRequestAdmin(admin.ModelAdmin):
         else:
             return format_html('<span style="color: orange; font-weight: bold;">⧖ Pending</span>')
     is_expired_badge.short_description = 'Status'
+
+
+@admin.register(ExcelImportHistory)
+class ExcelImportHistoryAdmin(admin.ModelAdmin):
+    list_display = ['file_name', 'uploaded_by', 'uploaded_at', 'imported_count', 'branch', 'assigned_staff', 'processed', 'file_link']
+    list_filter = ['uploaded_at', 'branch', 'assigned_staff', 'processed']
+    search_fields = ['file_name', 'uploaded_by__username']
+    readonly_fields = ['uploaded_at', 'file_name']
+    actions = ['reprocess_excel_files']
+
+    def file_link(self, obj):
+        if obj.file:
+            return format_html('<a href="{}" target="_blank">Download</a>', obj.file.url)
+        return '-'
+    file_link.short_description = 'File'
+    
+    def reprocess_excel_files(self, request, queryset):
+        """Re-process selected Excel files to import students"""
+        count = 0
+        for excel_import in queryset:
+            try:
+                # Reset processed flag to trigger re-processing
+                excel_import.processed = False
+                excel_import.imported_count = 0
+                excel_import.save()
+                
+                # The post_save signal will process the file
+                count += 1
+                logger.info(f'Re-queued Excel import {excel_import.id} for processing')
+            except Exception as e:
+                logger.error(f'Error re-processing Excel import {excel_import.id}: {str(e)}')
+        
+        self.message_user(request, f'{count} Excel file(s) re-queued for processing. Check logs for details.')
+    reprocess_excel_files.short_description = 'Re-process selected Excel files'
+
+
+@admin.register(ListedStudent)
+class ListedStudentAdmin(admin.ModelAdmin):
+    list_display = ['roll_number', 'first_name', 'last_name', 'email', 'college', 'branch', 'assigned_staff', 'import_history']
+    list_filter = ['college', 'branch', 'assigned_staff']
+    search_fields = ['roll_number', 'first_name', 'last_name', 'email']
+    readonly_fields = ['created_at']
+
+
+@admin.register(SignupVerification)
+class SignupVerificationAdmin(admin.ModelAdmin):
+    list_display = ['user', 'verified', 'created_at', 'expires_at']
+    readonly_fields = ['token', 'otp']
+    
+    def save_model(self, request, obj, form, change):
+        """Generate token and otp automatically if not provided"""
+        if not obj.token or obj.token.strip() == '':
+            # Generate unique token
+            while True:
+                obj.token = secrets.token_urlsafe(32)
+                # Check if token already exists
+                if not SignupVerification.objects.filter(token=obj.token).exclude(pk=obj.pk).exists():
+                    break
+        
+        if not obj.otp or obj.otp.strip() == '':
+            # Generate 6-digit OTP
+            obj.otp = str(secrets.randbelow(900000) + 100000)
+        
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(RegistrationApprovalRequest)
+class RegistrationApprovalRequestAdmin(admin.ModelAdmin):
+    list_display = [
+        'id', 'student_name', 'username', 'college', 'branch', 'status', 
+        'assigned_staff', 'created_at', 'lock_status_badge', 'time_since_assignment'
+    ]
+    list_filter = ['status', 'college', 'branch', 'source', 'staff_permissions_locked', 'created_at']
+    search_fields = ['user__username', 'user__email', 'user__first_name', 'user__last_name', 'roll_number']
+    readonly_fields = ['created_at', 'updated_at', 'assigned_at', 'first_reminder_sent_at', 'last_reminder_at']
+    fieldsets = (
+        ('Student Information', {
+            'fields': ('user', 'student_profile', 'roll_number', 'email')
+        }),
+        ('Registration Details', {
+            'fields': ('college', 'branch', 'year', 'source', 'status')
+        }),
+        ('Documents', {
+            'fields': ('id_proof', 'pan_card', 'live_selfie')
+        }),
+        ('Approval Process', {
+            'fields': ('assigned_staff', 'assigned_at', 'verification_passed', 'verification_details')
+        }),
+        ('Workflow Timeline', {
+            'fields': (
+                'first_reminder_sent_at', 'last_reminder_at', 'reminder_count', 
+                'staff_locked_at', 'staff_permissions_locked'
+            )
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    actions = ['approve_requests', 'reject_requests', 'unlock_staff_permissions']
+    
+    def student_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+    student_name.short_description = 'Student Name'
+    
+    def username(self, obj):
+        return obj.user.username
+    username.short_description = 'Username'
+    
+    def lock_status_badge(self, obj):
+        """Display lock status as a colored badge"""
+        if obj.staff_permissions_locked:
+            return format_html(
+                '<span style="background-color: #ff6b6b; color: white; padding: 3px 8px; border-radius: 3px;">'
+                'LOCKED</span>'
+            )
+        return format_html(
+            '<span style="background-color: #51cf66; color: white; padding: 3px 8px; border-radius: 3px;">'
+            'ACTIVE</span>'
+        )
+    lock_status_badge.short_description = 'Staff Status'
+    
+    def time_since_assignment(self, obj):
+        """Display time elapsed since assignment"""
+        if not obj.assigned_at:
+            return 'Not assigned'
+        elapsed = timezone.now() - obj.assigned_at
+        hours = elapsed.total_seconds() / 3600
+        return f'{hours:.1f}h'
+    time_since_assignment.short_description = 'Time Since Assign'
+    
+    def approve_requests(self, request, queryset):
+        """Admin action to approve selected requests"""
+        count = 0
+        for registration_request in queryset.filter(status='pending'):
+            registration_request.status = 'approved'
+            registration_request.save()
+            
+            # Send approval email to student
+            try:
+                from .views import send_registration_approved_email
+                send_registration_approved_email(registration_request)
+            except Exception as e:
+                logger.error(f'Error sending approval email: {str(e)}')
+            
+            # Create audit log
+            RegistrationAuditLog.objects.create(
+                request=registration_request,
+                action='approved',
+                performed_by=request.user,
+                details='Approved by admin'
+            )
+            
+            # Unlock staff permissions if locked
+            if registration_request.staff_permissions_locked:
+                registration_request.staff_permissions_locked = False
+                registration_request.staff_locked_at = None
+                registration_request.save()
+            
+            count += 1
+        
+        self.message_user(request, f'{count} request(s) approved successfully.')
+    approve_requests.short_description = 'Approve selected requests'
+    
+    def reject_requests(self, request, queryset):
+        """Admin action to reject selected requests"""
+        count = 0
+        for registration_request in queryset.filter(status='pending'):
+            registration_request.status = 'rejected'
+            registration_request.save()
+            
+            # Send rejection email to student
+            try:
+                from .views import send_registration_rejected_email
+                send_registration_rejected_email(
+                    registration_request, 
+                    reason='Your registration was rejected by the verification staff.'
+                )
+            except Exception as e:
+                logger.error(f'Error sending rejection email: {str(e)}')
+            
+            # Create audit log
+            RegistrationAuditLog.objects.create(
+                request=registration_request,
+                action='rejected',
+                performed_by=request.user,
+                details='Rejected by admin'
+            )
+            
+            # Unlock staff permissions if locked
+            if registration_request.staff_permissions_locked:
+                registration_request.staff_permissions_locked = False
+                registration_request.staff_locked_at = None
+                registration_request.save()
+            
+            count += 1
+        
+        self.message_user(request, f'{count} request(s) rejected successfully.')
+    reject_requests.short_description = 'Reject selected requests'
+    
+    def unlock_staff_permissions(self, request, queryset):
+        """Admin action to manually unlock staff permissions"""
+        count = 0
+        for registration_request in queryset.filter(staff_permissions_locked=True):
+            registration_request.staff_permissions_locked = False
+            registration_request.staff_locked_at = None
+            registration_request.save()
+            
+            # Create audit log
+            RegistrationAuditLog.objects.create(
+                request=registration_request,
+                action='staff_unlocked',
+                performed_by=request.user,
+                details='Staff permissions manually unlocked by admin'
+            )
+            
+            # Send email to staff that they've been unlocked
+            try:
+                staff_user = registration_request.assigned_staff
+                if staff_user and staff_user.email:
+                    subject = 'Your Admin Account Permissions Have Been Restored'
+                    message = f"""
+Dear {staff_user.get_full_name()},
+
+Your admin account permissions have been restored by an administrator.
+
+You can now access the full admin panel again.
+
+If you have any questions, please contact the system administrator.
+
+Best regards,
+SMRU Portal Admin Team
+                    """
+                    from django.core.mail import send_mail
+                    send_mail(
+                        subject,
+                        message,
+                        settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER,
+                        [staff_user.email],
+                        fail_silently=False,
+                    )
+            except Exception as e:
+                logger.error(f'Error sending unlock email: {str(e)}')
+            
+            count += 1
+        
+        self.message_user(request, f'{count} staff member(s) unlocked successfully.')
+    unlock_staff_permissions.short_description = 'Unlock staff permissions'

@@ -18,7 +18,7 @@ class UserRole(models.Model):
         ('other', 'Other'),
     )
     
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='user_role')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_roles')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='student')
     department = models.CharField(max_length=100, blank=True)  # For HODs, faculty, etc.
     is_active = models.BooleanField(default=True)
@@ -30,6 +30,20 @@ class UserRole(models.Model):
 
     def __str__(self):
         return f"{self.user.get_full_name()} - {self.get_role_display()}"
+
+
+# Backwards-compatible single-role accessor for templates and legacy code
+from django.contrib.auth.models import User as DjangoUser
+
+def _get_primary_user_role(self):
+    try:
+        # prefer active roles and return first one
+        return self.user_roles.filter(is_active=True).first() or self.user_roles.first()
+    except Exception:
+        return None
+
+
+DjangoUser.add_to_class('user_role', property(_get_primary_user_role))
 
 
 # College & Branch & Year & Subject for notes
@@ -57,6 +71,8 @@ class Branch(models.Model):
     college = models.ForeignKey(College, on_delete=models.CASCADE, related_name='branches')
     name = models.CharField(max_length=200)
     code = models.CharField(max_length=50, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ['college', 'name']
@@ -419,6 +435,8 @@ class PasswordResetRequest(models.Model):
 class UserAccountLock(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     is_locked = models.BooleanField(default=False)
+    # When True, this account bypasses lock checks (used by admins/system accounts)
+    unlimited_access = models.BooleanField(default=False)
     lock_reason = models.CharField(max_length=100, blank=True)
     locked_at = models.DateTimeField(blank=True, null=True)
     unlock_at = models.DateTimeField(blank=True, null=True)
@@ -465,4 +483,295 @@ class UserAccountLock(models.Model):
         if self.last_login_date != today:
             return True
         return self.daily_login_count < max_logins
+
+
+# Unlock requests (user requests admin to unlock their account)
+class UnlockRequest(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('sent', 'Sent to admin'),
+        ('completed', 'Completed'),
+        ('expired', 'Expired'),
+    )
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='unlock_requests')
+    token = models.CharField(max_length=100, unique=True)
+    otp = models.CharField(max_length=6, blank=True, null=True)
+    otp_verified = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    assigned_staff = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_unlocks')
+    assigned_at = models.DateTimeField(blank=True, null=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-requested_at']
+
+    def __str__(self):
+        return f"UnlockRequest {self.user.username} - {self.status}"
+
+
+# Signup verification model (Excel/listed-student feature removed)
+class SignupVerification(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='signup_verifications')
+    token = models.CharField(max_length=100, unique=True)
+    otp = models.CharField(max_length=6)
+    verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"SignupVerification {self.user.username} - {'verified' if self.verified else 'pending'}"
+
+
+# =================== Registration Approval & Audit Models ===================
+class RegistrationApprovalRequest(models.Model):
+    SOURCE_CHOICES = (
+        ('listed', 'Listed College'),
+        ('non_listed', 'Non Listed College'),
+    )
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('deleted', 'Deleted (No Response)'),
+    )
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='registration_requests')
+    student_profile = models.ForeignKey('StudentProfile', on_delete=models.CASCADE, null=True, blank=True, related_name='registration_requests')
+    college = models.ForeignKey(College, on_delete=models.SET_NULL, null=True, blank=True)
+    branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True)
+    year = models.ForeignKey(Year, on_delete=models.SET_NULL, null=True, blank=True)
+    roll_number = models.CharField(max_length=100, blank=True)
+    email = models.EmailField(blank=True)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='listed')
+    id_proof = models.FileField(upload_to='registration_proofs/', blank=True, null=True)
+    pan_card = models.FileField(upload_to='registration_proofs/', blank=True, null=True)
+    live_selfie = models.ImageField(upload_to='registration_selfies/', blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    assigned_staff = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_requests')
+    assigned_at = models.DateTimeField(blank=True, null=True)
+    
+    # Workflow timeline tracking for approval reminders
+    first_reminder_sent_at = models.DateTimeField(blank=True, null=True)
+    last_reminder_at = models.DateTimeField(blank=True, null=True)
+    reminder_count = models.IntegerField(default=0)
+    staff_locked_at = models.DateTimeField(blank=True, null=True)
+    staff_permissions_locked = models.BooleanField(default=False)
+    
+    verification_passed = models.BooleanField(default=False)
+    verification_details = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"RegistrationRequest {self.user.username} - {self.status}"
+    
+    def is_pending_response(self):
+        """Check if request is still waiting for staff response"""
+        return self.status == 'pending' and self.assigned_staff is not None
+
+
+# Excel import models (admin upload + listed students)
+
+class ExcelImportHistory(models.Model):
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='excel_imports')
+    file = models.FileField(upload_to='excel_imports/', blank=True, default='')
+    file_name = models.CharField(max_length=255, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    imported_count = models.IntegerField(default=0)
+    branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True, related_name='excel_imports')
+    assigned_staff = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_excel_imports')
+    processed = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f"ExcelImport {self.file_name or (self.file.name if self.file else '')} - {self.uploaded_at}"
+
+
+class ListedStudent(models.Model):
+    college = models.ForeignKey(College, on_delete=models.CASCADE, related_name='listed_students')
+    branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True)
+    branch_name = models.CharField(max_length=200, blank=True)
+    roll_number = models.CharField(max_length=100, blank=True)
+    first_name = models.CharField(max_length=100, blank=True)
+    last_name = models.CharField(max_length=100, blank=True)
+    email = models.EmailField(blank=True)
+    assigned_staff = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='listed_students_assigned')
+    import_history = models.ForeignKey(ExcelImportHistory, on_delete=models.SET_NULL, null=True, blank=True, related_name='imported_students')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.roll_number} - {self.first_name} {self.last_name} ({self.email})"
+
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+@receiver(post_save, sender=ExcelImportHistory)
+def process_excel_import(sender, instance, created, **kwargs):
+    import logging
+    logger = logging.getLogger('smru')
+    
+    if instance.processed:
+        return
+    
+    try:
+        # Delay import until file is saved to storage
+        if not instance.file:
+            logger.warning(f'ExcelImportHistory {instance.id}: No file attached')
+            return
+        
+        # Try to import openpyxl
+        try:
+            import openpyxl
+        except ImportError:
+            logger.error(f'ExcelImportHistory {instance.id}: openpyxl not installed')
+            return
+
+        logger.info(f'Processing Excel import {instance.id}: {instance.file.name}')
+        
+        # Open workbook
+        try:
+            wb = openpyxl.load_workbook(instance.file.path)
+        except Exception as e:
+            logger.error(f'ExcelImportHistory {instance.id}: Cannot open file {instance.file.path}: {str(e)}')
+            instance.processed = True
+            instance.imported_count = 0
+            instance.save()
+            return
+            
+        sheet = wb.active
+        imported = 0
+        total_rows = 0
+        
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            total_rows += 1
+            # Expect columns: roll_number, first_name, last_name, email
+            roll = (row[0] or '').strip() if row and row[0] else ''
+            first = (row[1] or '').strip() if row and len(row) > 1 and row[1] else ''
+            last = (row[2] or '').strip() if row and len(row) > 2 and row[2] else ''
+            email = (row[3] or '').strip() if row and len(row) > 3 and row[3] else ''
+
+            if not (roll or email):
+                logger.debug(f'ExcelImportHistory {instance.id}: Skipping row {total_rows} (no roll or email)')
+                continue
+
+            try:
+                obj, created_row = ListedStudent.objects.update_or_create(
+                    college=instance.branch.college if instance.branch else None,
+                    roll_number=roll,
+                    defaults={
+                        'first_name': first,
+                        'last_name': last,
+                        'email': email,
+                        'branch': instance.branch,
+                        'branch_name': instance.branch.name if instance.branch else '',
+                        'assigned_staff': instance.assigned_staff,
+                        'import_history': instance,
+                    }
+                )
+                imported += 1
+                logger.debug(f'ExcelImportHistory {instance.id}: Imported student {roll} - {email}')
+            except Exception as e:
+                logger.error(f'ExcelImportHistory {instance.id}: Error importing row {total_rows}: {str(e)}')
+                continue
+
+        instance.imported_count = imported
+        instance.processed = True
+        if not instance.file_name:
+            instance.file_name = instance.file.name
+        instance.save()
+        
+        logger.info(f'ExcelImportHistory {instance.id}: Successfully imported {imported} students out of {total_rows} rows')
+        
+    except Exception as e:
+        import traceback
+        logger = logging.getLogger('smru')
+        logger.error(f'ExcelImportHistory {instance.id}: Unexpected error: {str(e)}')
+        logger.error(traceback.format_exc())
+        instance.processed = True
+        instance.imported_count = 0
+        instance.save()
+
+
+class RegistrationAuditLog(models.Model):
+    request = models.ForeignKey(RegistrationApprovalRequest, on_delete=models.CASCADE, related_name='audit_logs')
+    action = models.CharField(max_length=100)
+    performed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='performed_audits')
+    timestamp = models.DateTimeField(auto_now_add=True)
+    details = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.action} on {self.request.id} at {self.timestamp}"
+
+
+class ReminderLog(models.Model):
+    request = models.ForeignKey(RegistrationApprovalRequest, on_delete=models.CASCADE, related_name='reminder_logs')
+    to_staff = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reminders_received')
+    sent_at = models.DateTimeField(auto_now_add=True)
+    message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-sent_at']
+
+    def __str__(self):
+        return f"Reminder for {self.request.id} at {self.sent_at}"
+
+
+class StaffLockLog(models.Model):
+    staff = models.ForeignKey(User, on_delete=models.CASCADE, related_name='lock_logs')
+    locked_at = models.DateTimeField(auto_now_add=True)
+    unlocked_at = models.DateTimeField(blank=True, null=True)
+    reason = models.CharField(max_length=200, blank=True)
+    locked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='locks_performed')
+
+    class Meta:
+        ordering = ['-locked_at']
+
+    def __str__(self):
+        return f"Lock {self.staff.username} at {self.locked_at}"
+
+
+class StaffPermission(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='staff_permissions')
+    permission = models.CharField(max_length=100)
+
+    class Meta:
+        unique_together = ['user', 'permission']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.permission}"
+
+
+# Study material model for admin uploads
+class StudyMaterial(models.Model):
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    file = models.FileField(upload_to='study_materials/')
+    college = models.ForeignKey(College, on_delete=models.SET_NULL, null=True, blank=True, related_name='study_materials')
+    branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True, related_name='study_materials')
+    year = models.ForeignKey(Year, on_delete=models.SET_NULL, null=True, blank=True, related_name='study_materials')
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='uploaded_study_materials')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.title
 

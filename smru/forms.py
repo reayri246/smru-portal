@@ -3,6 +3,14 @@ from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from django.db.models import Q
 from .models import Complaint, StudentProfile, UserRole, ComplaintCategory, ComplaintPerson, College
+from .models import StudyMaterial, Branch, Year
+from django.forms import ModelForm
+
+
+class StudyMaterialForm(ModelForm):
+    class Meta:
+        model = StudyMaterial
+        fields = ['title', 'description', 'file', 'college', 'branch', 'year']
 
 
 def get_college_choices():
@@ -63,12 +71,21 @@ class SignUpForm(UserCreationForm):
     
     phone = forms.CharField(
         max_length=15,
-        required=False,
+        required=True,
         widget=forms.TextInput(attrs={
             'class': 'form-control',
             'placeholder': 'Phone Number',
             'id': 'id_phone'
         })
+    )
+
+    accept_terms = forms.BooleanField(
+        required=True,
+        widget=forms.CheckboxInput(attrs={
+            'class': 'form-check-input',
+            'id': 'id_accept_terms'
+        }),
+        label='I agree to the Terms of Service and Privacy Policy'
     )
     
     # Student specific fields
@@ -185,8 +202,7 @@ class SignUpForm(UserCreationForm):
         widget=forms.TextInput(attrs={
             'class': 'form-control',
             'placeholder': 'Department (for HOD, Faculty, etc.)',
-            'id': 'id_department',
-            'style': 'display:none;'
+            'id': 'id_department'
         })
     )
     
@@ -269,7 +285,6 @@ class SignUpForm(UserCreationForm):
                 'year': 'Year',
                 'roll_number': 'Roll Number',
                 'phone': 'Phone Number',
-                'live_photo': 'Live Selfie',
             }
             
             for field, label in student_fields.items():
@@ -277,8 +292,8 @@ class SignUpForm(UserCreationForm):
                     raise forms.ValidationError(f"{label} is required for students.")
             
             # Either Student ID or PAN card must be provided (choose one)
-            if not cleaned_data.get('id_card') and not cleaned_data.get('pan_card'):
-                raise forms.ValidationError("Either Student ID Card or PAN Card must be uploaded. Choose one.")
+            # For listed colleges we will attempt to auto-verify against imported student records.
+            # Documents are required only if the college is 'other' (non-listed) or if matching fails.
             
             # If "Other" college is selected, other_college_name is required
             college_value = cleaned_data.get('college')
@@ -291,7 +306,16 @@ class SignUpForm(UserCreationForm):
                     cleaned_data['college'] = College.objects.get(pk=college_value)
                 except College.DoesNotExist:
                     raise forms.ValidationError("Invalid college selection.")
-        
+
+        if role != 'student':
+            if not cleaned_data.get('phone'):
+                raise forms.ValidationError("Phone number is required for non-student registrations.")
+            if not cleaned_data.get('department'):
+                raise forms.ValidationError("Department is required for non-student registrations.")
+
+        if not cleaned_data.get('accept_terms'):
+            raise forms.ValidationError("You must agree to the Terms of Service and Privacy Policy to register.")
+
         return cleaned_data
 
 
@@ -308,6 +332,29 @@ class LoginForm(forms.Form):
             'placeholder': 'Password'
         })
     )
+    captcha_answer = forms.CharField(
+        required=True,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Answer the captcha question'
+        }),
+        label='Captcha'
+    )
+
+    def __init__(self, *args, request=None, **kwargs):
+        self.request = request
+        super().__init__(*args, **kwargs)
+        if self.request and self.request.session.get('login_captcha_question'):
+            self.fields['captcha_answer'].label = self.request.session.get('login_captcha_question')
+
+    def clean_captcha_answer(self):
+        answer = self.cleaned_data.get('captcha_answer', '').strip()
+        if not self.request:
+            raise forms.ValidationError('Captcha verification failed.')
+        expected = self.request.session.get('login_captcha_answer')
+        if expected is None or answer != expected:
+            raise forms.ValidationError('Captcha is incorrect. Please try again.')
+        return answer
 
 
 class ForgotPasswordForm(forms.Form):
@@ -376,6 +423,31 @@ class ResetPasswordForm(forms.Form):
                 raise forms.ValidationError("Password must be at least 8 characters long.")
         
         return cleaned_data
+
+
+class UnlockRequestForm(forms.Form):
+    username_or_email = forms.CharField(
+        max_length=255,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Enter your username or email',
+            'autofocus': True
+        }),
+        label='Username or Email'
+    )
+
+
+class UnlockOtpForm(forms.Form):
+    token = forms.CharField(widget=forms.HiddenInput())
+    otp = forms.CharField(
+        max_length=6,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Enter the 6-digit OTP'
+        }),
+        label='OTP'
+    )
+
 
 
 class ComplaintForm(forms.ModelForm):

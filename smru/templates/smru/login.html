@@ -46,6 +46,17 @@
                             {% endif %}
                         </div>
 
+                        <div class="mb-3">
+                            <label for="id_captcha_answer" class="form-label">{{ form.captcha_answer.label }}</label>
+                            {{ form.captcha_answer }}
+                            {% if form.captcha_answer.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.captcha_answer.errors }}
+                            </div>
+                            {% endif %}
+                            <small class="form-text text-muted">Answer the math question shown above to verify you are human.</small>
+                        </div>
+
                         <div class="mb-3 form-check">
                             <input type="checkbox" name="remember_me" class="form-check-input" id="rememberMe">
                             <label class="form-check-label" for="rememberMe">
@@ -57,6 +68,8 @@
                             <a href="{% url 'smru:forgot_password' %}" class="text-muted text-decoration-none small">
                                 Forgot password?
                             </a>
+                            <br>
+                            <a href="{% url 'smru:request_unlock' %}" class="text-muted text-decoration-none small">Request account unlock</a>
                         </div>
 
                         <button type="submit" class="btn btn-primary btn-lg w-100 mb-3">

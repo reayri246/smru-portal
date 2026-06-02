@@ -51,15 +51,38 @@
                             {% endif %}
                         </div>
 
-                        <div class="mb-3" id="departmentField" style="display: none;">
-                            <label for="id_department" class="form-label">Department</label>
-                            {{ form.department }}
-                            {% if form.department.errors %}
-                            <div class="invalid-feedback d-block">{{ form.department.errors }}</div>
+                        <!-- Non-Student Section -->
+                        <div id="nonStudentSection" style="display: none;">
+                            <div class="alert alert-primary">
+                                <strong><i class="fas fa-info-circle"></i> Staff/Faculty Registration</strong>
+                                <p class="mb-0 mt-2">Please provide the following information to complete your registration.</p>
+                            </div>
+
+                            <div class="mb-3" id="departmentField">
+                                <label for="id_department" class="form-label">Department <span class="text-danger">*</span></label>
+                                {{ form.department }}
+                                {% if form.department.errors %}
+                                <div class="invalid-feedback d-block">{{ form.department.errors }}</div>
+                                {% endif %}
+                                <small class="form-text text-muted">Enter your department or faculty area</small>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="id_email" class="form-label">Email Address <span class="text-danger">*</span></label>
+                            {{ form.email }}
+                            {% if form.email.errors %}
+                            <div class="invalid-feedback d-block">{{ form.email.errors }}</div>
                             {% endif %}
                         </div>
 
-                        <!-- Student Fields -->
+                        <div class="mb-3">
+                            <label for="id_phone" class="form-label">Phone Number <span class="text-danger">*</span></label>
+                            {{ form.phone }}
+                            {% if form.phone.errors %}
+                            <div class="invalid-feedback d-block">{{ form.phone.errors }}</div>
+                            {% endif %}
+                        </div>
                         <div id="studentFields" style="display: none;">
                             <hr>
                             <h5 class="mb-4">Student Information</h5>
@@ -101,8 +124,14 @@
 
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label for="id_branch" class="form-label">Branch <span class="text-danger">*</span></label>
-                                    {{ form.branch }}
+                                    <div id="branchTextField">
+                                        <label for="id_branch" class="form-label">Branch <span class="text-danger">*</span></label>
+                                        {{ form.branch }}
+                                    </div>
+                                    <div id="branchSelectField" style="display:none;">
+                                        <label for="id_branch_select" class="form-label">Branch <span class="text-danger">*</span></label>
+                                        <select name="branch" class="form-control" id="id_branch_select"></select>
+                                    </div>
                                     {% if form.branch.errors %}
                                     <div class="invalid-feedback d-block">{{ form.branch.errors }}</div>
                                     {% endif %}
@@ -125,17 +154,10 @@
                                 <small class="form-text text-muted">Enter your official roll/registration number</small>
                             </div>
 
-                            <div class="mb-3">
-                                <label for="id_phone" class="form-label">Phone Number <span class="text-danger">*</span></label>
-                                {{ form.phone }}
-                                {% if form.phone.errors %}
-                                <div class="invalid-feedback d-block">{{ form.phone.errors }}</div>
-                                {% endif %}
-                            </div>
-
                             <hr>
-                            <h5 class="mb-4">ID Proof - Choose One:</h5>
+                            <h5 class="mb-4" id="idProofHeader">ID Proof - Choose One:</h5>
 
+                            <div id="documentsSection">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <div class="card border-primary">
@@ -173,7 +195,7 @@
                                 </div>
                             </div>
 
-                            <div class="mb-3">
+                            <div class="mb-3" id="livePhotoField">
                                 <label for="id_live_photo" class="form-label">Live Selfie for Verification <span class="text-danger">*</span></label>
                                 {{ form.live_photo }}
                                 {% if form.live_photo.errors %}
@@ -184,24 +206,18 @@
                                 </small>
                             </div>
 
-                            <div class="alert alert-warning">
+                            <div class="alert alert-warning" id="idProofAlert">
                                 <strong>⚠️ ID Proof Requirements:</strong>
                                 <ul class="mb-0 mt-2">
                                     <li><strong>Choose ONE:</strong> Upload either Student ID Card OR PAN Card (not both required)</li>
-                                    <li><strong>Mandatory:</strong> A live selfie photo is required for verification</li>
+                                    <li id="idProofListedNote"><strong>Mandatory:</strong> A live selfie photo is required for verification</li>
                                     <li><strong>Camera Access:</strong> Use your device camera for best quality</li>
                                     <li><strong>Quality:</strong> Clear and readable images are required for admin approval</li>
                                     <li><strong>Note:</strong> Do NOT upload Aadhar or other documents - only Student ID or PAN Card</li>
                                 </ul>
                             </div>
-                        </div>
 
-                        <div class="mb-3">
-                            <label for="id_email" class="form-label">Email Address <span class="text-danger">*</span></label>
-                            {{ form.email }}
-                            {% if form.email.errors %}
-                            <div class="invalid-feedback d-block">{{ form.email.errors }}</div>
-                            {% endif %}
+                            </div>
                         </div>
 
                         <div class="mb-3">
@@ -233,12 +249,15 @@
                             </ul>
                         </div>
 
-                        <div class="mb-3 form-check">
-                            <input type="checkbox" class="form-check-input" id="termsCheck" required>
-                            <label class="form-check-label" for="termsCheck">
+                            <div class="mb-3 form-check">
+                            {{ form.accept_terms }}
+                            <label class="form-check-label" for="id_accept_terms">
                                 I agree to the <a href="{% url 'smru:terms_of_service' %}" target="_blank">Terms of Service</a> and 
                                 <a href="{% url 'smru:privacy_policy' %}" target="_blank">Privacy Policy</a>
                             </label>
+                            {% if form.accept_terms.errors %}
+                            <div class="invalid-feedback d-block">{{ form.accept_terms.errors }}</div>
+                            {% endif %}
                         </div>
 
                         <button type="submit" class="btn btn-primary btn-lg w-100 mb-3">
@@ -252,6 +271,8 @@
                         <p class="text-muted mb-0">
                             Already have an account? 
                             <a href="{% url 'smru:login' %}" class="text-primary fw-bold">Sign In Here</a>
+                            <br>
+                            <a href="{% url 'smru:request_unlock' %}" class="text-muted small">Request account unlock</a>
                         </p>
                     </div>
                 </div>
@@ -261,16 +282,20 @@
 </div>
 
 <script>
-// Handle role change to show/hide student fields
+// Handle role change to show/hide student fields and non-student section
 document.getElementById('id_role').addEventListener('change', function() {
     const role = this.value;
-    const departmentField = document.getElementById('departmentField');
+    const nonStudentSection = document.getElementById('nonStudentSection');
     const studentFields = document.getElementById('studentFields');
+    const departmentField = document.getElementById('departmentField');
     
-    // Show department field for certain roles
-    if (['hod', 'faculty'].includes(role)) {
+    // Show non-student section for non-student roles
+    const nonStudentRoles = ['hod', 'chairman', 'principal', 'director', 'faculty', 'security', 'anti_ragging_team', 'she_team', 'other'];
+    if (nonStudentRoles.includes(role)) {
+        nonStudentSection.style.display = 'block';
         departmentField.style.display = 'block';
     } else {
+        nonStudentSection.style.display = 'none';
         departmentField.style.display = 'none';
     }
     
@@ -296,12 +321,16 @@ document.getElementById('id_college').addEventListener('change', function() {
         otherCollegeInput.required = false;
         otherCollegeInput.value = '';
     }
+    // update document fields visibility based on selected college
+    toggleDocumentsVisibility();
+    toggleBranchField();
 });
 
 // Update college list based on selected type
 async function updateCollegeList() {
     const collegeType = document.getElementById('id_college_type').value;
     const collegeSelect = document.getElementById('id_college');
+    const selectedCollegeValue = collegeSelect ? collegeSelect.value : '';
     const apiUrl = "{% url 'smru:get_colleges_by_type' %}";
 
     if (!collegeType) {
@@ -333,21 +362,112 @@ async function updateCollegeList() {
             option.textContent = college.name;
             collegeSelect.appendChild(option);
         });
+        if (selectedCollegeValue) {
+            collegeSelect.value = selectedCollegeValue;
+        }
+        toggleBranchField();
     } catch (error) {
         console.error('Error loading colleges:', error);
         collegeSelect.innerHTML = '<option value="">Error loading colleges</option>';
     }
 }
 
-// Toggle student fields visibility for input
-function toggleStudentFields() {
-    const role = document.getElementById('id_role').value;
-    const studentFields = document.getElementById('studentFields');
-    
-    if (role === 'student') {
-        studentFields.style.display = 'block';
+// Show/hide ID proof and selfie fields depending on whether selected college is listed
+function toggleDocumentsVisibility() {
+    const collegeSelect = document.getElementById('id_college');
+    const collegeVal = collegeSelect ? collegeSelect.value : '';
+    const documentsSection = document.getElementById('documentsSection');
+    const livePhotoField = document.getElementById('livePhotoField');
+    const idCardInput = document.getElementById('id_id_card');
+    const panCardInput = document.getElementById('id_pan_card');
+    const livePhotoInput = document.getElementById('id_live_photo');
+    const idProofListedNote = document.getElementById('idProofListedNote');
+    const idProofHeader = document.getElementById('idProofHeader');
+
+    // If college is 'other' or empty -> treat as non-listed (require documents)
+    if (!collegeVal || collegeVal === 'other') {
+        if (documentsSection) documentsSection.style.display = 'block';
+        if (idProofHeader) idProofHeader.style.display = 'block';
+        if (livePhotoField) livePhotoField.style.display = 'block';
+        if (idCardInput) idCardInput.required = false;
+        if (panCardInput) panCardInput.required = false;
+        if (livePhotoInput) livePhotoInput.required = true;
+        if (idProofListedNote) idProofListedNote.style.display = 'list-item';
     } else {
-        studentFields.style.display = 'none';
+        // Listed college: hide document uploads (not required during signup)
+        if (documentsSection) documentsSection.style.display = 'none';
+        if (idProofHeader) idProofHeader.style.display = 'none';
+        if (livePhotoField) livePhotoField.style.display = 'none';
+        if (idCardInput) { idCardInput.required = false; idCardInput.value = ''; }
+        if (panCardInput) { panCardInput.required = false; panCardInput.value = ''; }
+        if (livePhotoInput) { livePhotoInput.required = false; livePhotoInput.value = ''; }
+        if (idProofListedNote) idProofListedNote.style.display = 'none';
+    }
+}
+
+// Show branch dropdown for listed colleges and fallback to text input for non-listed students
+async function toggleBranchField() {
+    const collegeSelect = document.getElementById('id_college');
+    const branchTextField = document.getElementById('branchTextField');
+    const branchSelectField = document.getElementById('branchSelectField');
+    const branchTextInput = document.getElementById('id_branch');
+    const branchSelect = document.getElementById('id_branch_select');
+    const selectedCollege = collegeSelect ? collegeSelect.value : '';
+    const apiUrl = "{% url 'smru:get_branches_by_college' %}";
+
+    if (!collegeSelect || !branchTextField || !branchSelectField || !branchTextInput || !branchSelect) {
+        return;
+    }
+
+    if (!selectedCollege || selectedCollege === 'other') {
+        branchTextField.style.display = 'block';
+        branchTextInput.required = true;
+        branchSelectField.style.display = 'none';
+        branchSelect.innerHTML = '';
+        return;
+    }
+
+    try {
+        const response = await fetch(`${apiUrl}?college_id=${encodeURIComponent(selectedCollege)}`);
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!Array.isArray(data.branches) || data.branches.length === 0) {
+            branchTextField.style.display = 'block';
+            branchTextInput.required = true;
+            branchSelectField.style.display = 'none';
+            branchSelect.innerHTML = '';
+            return;
+        }
+
+        branchSelect.innerHTML = '<option value="">Select a Branch</option>';
+        data.branches.forEach(branch => {
+            const option = document.createElement('option');
+            option.value = branch.name;
+            option.textContent = branch.name;
+            branchSelect.appendChild(option);
+        });
+
+        branchTextField.style.display = 'none';
+        branchTextInput.required = false;
+        branchSelectField.style.display = 'block';
+        branchSelect.required = true;
+
+        const existingBranch = branchTextInput.value;
+        if (existingBranch) {
+            const match = Array.from(branchSelect.options).find(opt => opt.value === existingBranch);
+            if (match) {
+                match.selected = true;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading branches:', error);
+        branchTextField.style.display = 'block';
+        branchTextInput.required = true;
+        branchSelectField.style.display = 'none';
+        branchSelect.innerHTML = '';
     }
 }
 
@@ -360,6 +480,17 @@ document.addEventListener('DOMContentLoaded', function() {
     if (collegeType) {
         updateCollegeList();
     }
+    else {
+        // Preload engineering colleges to show list by default for better UX
+        document.getElementById('id_college_type').value = 'engineering';
+        updateCollegeList();
+    }
+    // ensure document visibility reflects current college selection
+    // small timeout to let updateCollegeList populate options if it ran
+    setTimeout(function() {
+        toggleDocumentsVisibility();
+        toggleBranchField();
+    }, 350);
 });
 </script>
 {% endblock %}

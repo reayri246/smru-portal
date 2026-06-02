@@ -622,6 +622,40 @@
         .smooth-scroll {
             scroll-behavior: smooth;
         }
+
+        /* Notifications & Events layout: rectangular and side-by-side */
+        .notifications-container,
+        .events-container {
+            display: flex !important;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: stretch;
+            margin-left: 0.25rem;
+            margin-right: 0.25rem;
+        }
+
+        .notifications-container .card,
+        .events-container .card,
+        .events-container .event-card {
+            border-radius: 6px !important;
+            box-shadow: var(--shadow-sm) !important;
+            width: calc(50% - 1rem) !important;
+            min-width: 280px;
+            max-width: 48% !important;
+            display: flex !important;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        @media (max-width: 900px) {
+            .notifications-container .card,
+            .events-container .card,
+            .events-container .event-card {
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+        }
     </style>
 
     {% block extra_css %}{% endblock %}
@@ -643,15 +677,17 @@
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:home' %}">Home</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:about' %}">About Us</a></li>
+                    {% if not user.user_role or user.user_role.role != 'admin' %}
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:notifications' %}">Notifications</a></li>
-                    {% if user.user_role and user.user_role.role in 'hod,chairman,principal,director,faculty,security,admin' %}
+                    {% endif %}
+                    {% if user.is_staff or user.is_superuser or user.user_role and user.user_role.role == 'hod' or user.user_role and user.user_role.role == 'chairman' or user.user_role and user.user_role.role == 'principal' or user.user_role and user.user_role.role == 'director' or user.user_role and user.user_role.role == 'faculty' or user.user_role and user.user_role.role == 'security' or user.user_role and user.user_role.role == 'admin' %}
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:staff_notifications' %}">Assigned Notifications</a></li>
                     {% endif %}
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:events' %}">Events</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:engineering' %}">Engineering Notes</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:medical' %}">Medical Notes</a></li>
                     
-                    {% if user.user_role and user.user_role.role in 'hod,chairman,principal,director,faculty,security,admin' %}
+                    {% if user.is_staff or user.is_superuser or user.user_role and user.user_role.role == 'hod' or user.user_role and user.user_role.role == 'chairman' or user.user_role and user.user_role.role == 'principal' or user.user_role and user.user_role.role == 'director' or user.user_role and user.user_role.role == 'faculty' or user.user_role and user.user_role.role == 'security' or user.user_role and user.user_role.role == 'admin' %}
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:manage_complaints' %}">Manage Complaints</a></li>
                     {% else %}
                     <li class="nav-item"><a class="nav-link" href="{% url 'smru:complaints' %}">Complaints</a></li>
